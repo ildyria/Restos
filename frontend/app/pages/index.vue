@@ -7,7 +7,6 @@ import type { MapPin } from '~/components/RestaurantMap.vue'
 useSeoMeta({ title: `${SITE_NAME} — where we ate`, description: 'Restaurants we have visited, ranked by preference.' })
 
 const { data: list, status } = await useFetch<RestaurantSummary[]>('/api/restaurants', { query: { sort: 'rank' }, default: () => [] })
-const { names } = usePeople()
 
 const ranked = computed(() => (list.value ?? []).filter(r => r.rank_position !== null))
 const unranked = computed(() => (list.value ?? []).filter(r => r.rank_position === null))
@@ -40,16 +39,9 @@ async function selectPin(id: number) {
 <template>
   <div :class="showMap && wide ? 'grid grid-cols-[minmax(0,1fr)_400px] gap-10' : ''">
     <div class="min-w-0">
-      <section class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 class="font-display text-4xl leading-none sm:text-5xl">Where we ate</h1>
-          <p class="mt-2.5 text-base text-muted">
-            <span class="hidden sm:inline">Our favourite restaurants, in our own order.</span>
-            <span class="sm:hidden">In our own order.</span>
-            <template v-if="names"> Rated by {{ names }}.</template>
-          </p>
-        </div>
-        <div v-if="showMap && !wide" class="flex gap-0.5 self-start rounded-lg border border-default bg-elevated p-[3px] sm:self-auto" role="tablist">
+      <h1 class="sr-only">Where we ate</h1>
+      <section v-if="showMap && !wide" class="mb-6 flex sm:justify-end">
+        <div class="flex gap-0.5 rounded-lg border border-default bg-elevated p-[3px]" role="tablist">
           <button
             v-for="t in tabs"
             :key="t.value"
