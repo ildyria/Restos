@@ -1,0 +1,14 @@
+services:
+  restos:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - restos-data:/data
+    environment:
+      # Set to "true" when served over HTTPS (e.g. behind a reverse proxy).
+      RESTOS_COOKIE_SECURE: "false"
+
+volumes:
+  restos-data:

@@ -1,0 +1,42 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+
+@theme static {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-serif: 'Fraunces', ui-serif, Georgia, serif;
+
+  /* One muted accent: baked-clay terracotta. */
+  --color-terracotta-50: #fbf4f0;
+  --color-terracotta-100: #f6e5dc;
+  --color-terracotta-200: #ecc9b8;
+  --color-terracotta-300: #dfa58b;
+  --color-terracotta-400: #d17f5e;
+  --color-terracotta-500: #c05f3d;
+  --color-terracotta-600: #ad4a2f;
+  --color-terracotta-700: #903b28;
+  --color-terracotta-800: #763326;
+  --color-terracotta-900: #612d23;
+  --color-terracotta-950: #34150f;
+}
+
+:root {
+  --ui-radius: 0.375rem;
+}
+
+html {
+  font-feature-settings: 'cv11', 'ss01';
+}
+
+.font-display {
+  font-family: var(--font-serif);
+  font-optical-sizing: auto;
+  letter-spacing: -0.01em;
+}
+
+/* Rank numerals: large, light, tabular. */
+.rank-numeral {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  font-variant-numeric: lining-nums;
+  line-height: 1;
+}
