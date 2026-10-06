@@ -7,7 +7,7 @@ RUN npm ci
 COPY frontend/ ./
 RUN npx nuxt generate
 
-FROM golang:1.26-alpine AS backend
+FROM golang:1.27-alpine AS backend
 WORKDIR /src/backend
 COPY backend/go.mod backend/go.sum ./
 RUN go mod download

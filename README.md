@@ -18,6 +18,8 @@ docker compose up --build -d
 docker compose exec restos /restos user create --email you@example.com --name "You"   # prompts for a password
 ```
 
+A prebuilt image (linux/amd64) is published to GitHub Container Registry by the `Docker image` workflow on every push to `master` (`:latest`) and on `v*` tags (`:1.2.3`): use `image: ghcr.io/ildyria/restos:latest` in `docker-compose.yml` instead of `build: .` to skip building.
+
 Open http://localhost:8080 and sign in at `/admin/login`. If you serve it over HTTPS, set `RESTOS_COOKIE_SECURE: "true"` in `docker-compose.yml`.
 
 The distroless image has no TTY for password prompts in some setups; use `-e RESTOS_PASSWORD=...` with `docker compose exec` if the prompt isn't available.
