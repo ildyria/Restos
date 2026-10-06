@@ -45,14 +45,11 @@ const courseLabel = (c: string | null) => COURSES.find(x => x.value === c)?.labe
         <p v-if="r.rank_position" class="rank-numeral text-lg text-primary">
           № {{ r.rank_position }} on our list
         </p>
-        <h1 class="font-display text-4xl font-medium leading-tight sm:text-5xl">{{ r.name }}</h1>
-        <p class="mt-3 text-muted">
+        <h1 class="font-display text-4xl font-medium leading-tight sm:text-5xl">{{ r.name }}<MichelinStars v-if="r.michelin_stars" :count="r.michelin_stars" class="ml-3 text-2xl" /></h1>
+        <p v-if="r.cuisine || r.price_level" class="mt-3 text-muted">
           <span v-if="r.cuisine">{{ r.cuisine }}</span>
           <span v-if="r.cuisine && r.price_level"> · </span>
           <span v-if="r.price_level">{{ priceLabel(r.price_level) }}</span>
-          <template v-if="r.michelin_stars">
-            <template v-if="r.cuisine || r.price_level"> · </template><MichelinStars :count="r.michelin_stars" />
-          </template>
         </p>
         <p v-if="r.address || r.city" class="mt-1 flex items-center gap-1.5 text-sm text-muted">
           <UIcon name="i-lucide-map-pin" class="size-4 shrink-0" />
