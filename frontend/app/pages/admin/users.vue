@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { User } from '~~/shared/types'
 
-definePageMeta({ layout: 'admin', middleware: 'admin' })
+definePageMeta({ layout: 'admin' })
 useSeoMeta({ title: `Admins — ${SITE_NAME} admin`, robots: 'noindex' })
 
 const toast = useToast()

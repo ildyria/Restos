@@ -2,7 +2,7 @@
 import Sortable from 'sortablejs'
 import type { RestaurantSummary } from '~~/shared/types'
 
-definePageMeta({ layout: 'admin', middleware: 'admin' })
+definePageMeta({ layout: 'admin' })
 useSeoMeta({ title: `Ranking — ${SITE_NAME} admin`, robots: 'noindex' })
 
 const toast = useToast()

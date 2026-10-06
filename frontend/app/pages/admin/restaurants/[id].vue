@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { RATING_CRITERIA } from '~~/shared/types'
 import type { Photo, RestaurantDetail, RestaurantInput, ScoreInput, SitePreview, User, Visit } from '~~/shared/types'
 
-definePageMeta({ layout: 'admin', middleware: 'admin' })
+definePageMeta({ layout: 'admin' })
 
 const route = useRoute()
 const toast = useToast()

@@ -32,7 +32,7 @@ Requires Go 1.26+ and Node 24+.
 ```sh
 cd backend && go run ./cmd/restos user create --email you@example.com --name "You"
 make dev            # API on :8080, Nuxt on :3000 (proxies /api and /media); open http://localhost:3000
-make test           # go tests + frontend typecheck
+make test           # go tests + frontend typecheck and unit tests (vitest)
 make build          # single binary with the frontend embedded: bin/restos
 ```
 

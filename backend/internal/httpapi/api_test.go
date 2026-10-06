@@ -25,6 +25,8 @@ type env struct {
 	srv    http.Handler
 	media  string
 	cookie *http.Cookie
+	store  *db.Store
+	server *Server
 }
 
 func newEnv(t *testing.T, opts ...func(*Server)) *env {
@@ -43,7 +45,7 @@ func newEnv(t *testing.T, opts ...func(*Server)) *env {
 	for _, o := range opts {
 		o(s)
 	}
-	return &env{t: t, srv: s.Routes(), media: filepath.Join(dir, "media")}
+	return &env{t: t, srv: s.Routes(), media: filepath.Join(dir, "media"), store: st, server: s}
 }
 
 func (e *env) do(method, path string, body any, csrf bool) *httptest.ResponseRecorder {

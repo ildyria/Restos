@@ -2,7 +2,7 @@
 import { watchDebounced } from '@vueuse/core'
 import type { AdminAbout } from '~~/shared/types'
 
-definePageMeta({ layout: 'admin', middleware: 'admin' })
+definePageMeta({ layout: 'admin' })
 useSeoMeta({ title: `About page — ${SITE_NAME} admin`, robots: 'noindex' })
 
 const toast = useToast()

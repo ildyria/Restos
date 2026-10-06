@@ -19,7 +19,7 @@ build:
 
 test:
 	cd backend && go test ./...
-	cd frontend && npx nuxt typecheck
+	cd frontend && npx nuxt typecheck && npm test
 
 docker:
 	docker compose up --build

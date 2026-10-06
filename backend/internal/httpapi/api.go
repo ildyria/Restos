@@ -98,36 +98,51 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("GET /api/auth/config", wrap(s.authConfig))
 	mux.Handle("POST /api/auth/register", auth.CSRF(wrap(s.register)))
 
-	// Admin.
+	// Admin: every route in adminRoutes sits behind login and the CSRF check.
 	admin := http.NewServeMux()
-	admin.Handle("POST /api/admin/restaurants", wrap(s.createRestaurant))
-	admin.Handle("GET /api/admin/restaurants/{id}", wrap(s.adminGetRestaurant))
-	admin.Handle("PUT /api/admin/restaurants/{id}", wrap(s.updateRestaurant))
-	admin.Handle("DELETE /api/admin/restaurants/{id}", wrap(s.deleteRestaurant))
-	admin.Handle("PUT /api/admin/restaurants/{id}/cover", wrap(s.setCover))
-	admin.Handle("PUT /api/admin/ranking", wrap(s.setRanking))
-	admin.Handle("POST /api/admin/restaurants/{id}/visits", wrap(s.createVisit))
-	admin.Handle("PUT /api/admin/visits/{id}", wrap(s.updateVisit))
-	admin.Handle("DELETE /api/admin/visits/{id}", wrap(s.deleteVisit))
-	admin.Handle("POST /api/admin/visits/{id}/dishes", wrap(s.createDish))
-	admin.Handle("PUT /api/admin/dishes/{id}", wrap(s.updateDish))
-	admin.Handle("DELETE /api/admin/dishes/{id}", wrap(s.deleteDish))
-	admin.Handle("POST /api/admin/dishes/{id}/photos", wrap(s.uploadDishPhotos))
-	admin.Handle("POST /api/admin/visits/{id}/photos", wrap(s.uploadVisitPhotos))
-	admin.Handle("PUT /api/admin/photos/{id}", wrap(s.setPhotoDish))
-	admin.Handle("POST /api/admin/site-preview", wrap(s.sitePreview))
-	admin.Handle("PUT /api/admin/photos/order", wrap(s.reorderPhotos))
-	admin.Handle("DELETE /api/admin/photos/{id}", wrap(s.deletePhoto))
-	admin.Handle("GET /api/admin/about", wrap(s.adminGetAbout))
-	admin.Handle("PUT /api/admin/about", wrap(s.setAbout))
-	admin.Handle("POST /api/admin/about/preview", wrap(s.previewAbout))
-	admin.Handle("POST /api/admin/about/photo", wrap(s.uploadAboutPhoto))
-	admin.Handle("DELETE /api/admin/about/photo", wrap(s.deleteAboutPhoto))
-	admin.Handle("GET /api/admin/users", wrap(s.listUsers))
-	admin.Handle("POST /api/admin/users", wrap(s.createUser))
-	admin.Handle("DELETE /api/admin/users/{id}", wrap(s.deleteUser))
+	for _, rt := range s.adminRoutes() {
+		admin.Handle(rt.pattern, wrap(rt.handler))
+	}
 	mux.Handle("/api/admin/", auth.CSRF(s.Auth.Require(admin)))
 
 	mux.Handle("/api/", wrap(func(http.ResponseWriter, *http.Request) error { return db.ErrNotFound }))
 	return mux
+}
+
+type route struct {
+	pattern string
+	handler handlerFunc
+}
+
+// adminRoutes lists every admin endpoint. Routes registers them behind auth.Require, and
+// TestAdminRoutesRequireLogin walks this same list, so a new admin route is covered automatically.
+func (s *Server) adminRoutes() []route {
+	return []route{
+		{"POST /api/admin/restaurants", s.createRestaurant},
+		{"GET /api/admin/restaurants/{id}", s.adminGetRestaurant},
+		{"PUT /api/admin/restaurants/{id}", s.updateRestaurant},
+		{"DELETE /api/admin/restaurants/{id}", s.deleteRestaurant},
+		{"PUT /api/admin/restaurants/{id}/cover", s.setCover},
+		{"PUT /api/admin/ranking", s.setRanking},
+		{"POST /api/admin/restaurants/{id}/visits", s.createVisit},
+		{"PUT /api/admin/visits/{id}", s.updateVisit},
+		{"DELETE /api/admin/visits/{id}", s.deleteVisit},
+		{"POST /api/admin/visits/{id}/dishes", s.createDish},
+		{"PUT /api/admin/dishes/{id}", s.updateDish},
+		{"DELETE /api/admin/dishes/{id}", s.deleteDish},
+		{"POST /api/admin/dishes/{id}/photos", s.uploadDishPhotos},
+		{"POST /api/admin/visits/{id}/photos", s.uploadVisitPhotos},
+		{"PUT /api/admin/photos/{id}", s.setPhotoDish},
+		{"POST /api/admin/site-preview", s.sitePreview},
+		{"PUT /api/admin/photos/order", s.reorderPhotos},
+		{"DELETE /api/admin/photos/{id}", s.deletePhoto},
+		{"GET /api/admin/about", s.adminGetAbout},
+		{"PUT /api/admin/about", s.setAbout},
+		{"POST /api/admin/about/preview", s.previewAbout},
+		{"POST /api/admin/about/photo", s.uploadAboutPhoto},
+		{"DELETE /api/admin/about/photo", s.deleteAboutPhoto},
+		{"GET /api/admin/users", s.listUsers},
+		{"POST /api/admin/users", s.createUser},
+		{"DELETE /api/admin/users/{id}", s.deleteUser},
+	}
 }
