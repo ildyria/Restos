@@ -3,9 +3,35 @@
 
 @theme static {
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
-  --font-serif: 'Fraunces', ui-serif, Georgia, serif;
+  --font-serif: 'EB Garamond', 'Fraunces', ui-serif, Georgia, serif;
 
-  /* One muted accent: baked-clay terracotta. */
+  /* Accent: journal ink blue (500 is the design's #2b5b84). */
+  --color-ink-50: #f0f4f8;
+  --color-ink-100: #dde6ef;
+  --color-ink-200: #bccede;
+  --color-ink-300: #8eabc6;
+  --color-ink-400: #5f86a9;
+  --color-ink-500: #2b5b84;
+  --color-ink-600: #24496a;
+  --color-ink-700: #1d3a55;
+  --color-ink-800: #172f45;
+  --color-ink-900: #122437;
+  --color-ink-950: #0b1724;
+
+  /* Success / "would go back": muted sage (500 is the design's #3f7a4c). */
+  --color-sage-50: #f1f6f2;
+  --color-sage-100: #e0ebe2;
+  --color-sage-200: #c2d7c6;
+  --color-sage-300: #9bbda2;
+  --color-sage-400: #6f9c78;
+  --color-sage-500: #3f7a4c;
+  --color-sage-600: #356841;
+  --color-sage-700: #2b5235;
+  --color-sage-800: #24432c;
+  --color-sage-900: #1e3825;
+  --color-sage-950: #0f1f14;
+
+  /* Former accent: baked-clay terracotta. */
   --color-terracotta-50: #fbf4f0;
   --color-terracotta-100: #f6e5dc;
   --color-terracotta-200: #ecc9b8;
@@ -27,6 +53,16 @@ html {
   font-feature-settings: 'cv11', 'ss01';
 }
 
+/* Journal masthead: double rule under the section nav. */
+.rule-double {
+  border-top: 1px solid var(--ui-text-highlighted);
+  border-bottom: 3px double var(--ui-text-highlighted);
+}
+
+.lining {
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
 .font-display {
   font-family: var(--font-serif);
   font-optical-sizing: auto;
@@ -39,4 +75,117 @@ html {
   font-weight: 400;
   font-variant-numeric: lining-nums;
   line-height: 1;
+}
+
+/* Map pins (Leaflet divIcons) shared by the public map and the admin location picker. */
+.map-pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  border: 2px solid #fff;
+  background: var(--ui-text-highlighted);
+  color: var(--ui-bg);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+  font-family: var(--font-serif);
+  font-size: 12px;
+  font-variant-numeric: lining-nums;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.map-pin.is-active {
+  background: var(--ui-primary);
+  color: #fff;
+}
+
+.leaflet-container {
+  font-family: var(--font-sans);
+  background: var(--ui-bg-elevated);
+}
+
+.leaflet-tile-pane {
+  filter: grayscale(1) contrast(0.92) brightness(1.04);
+}
+
+.dark .leaflet-tile-pane {
+  filter: grayscale(1) invert(1) contrast(0.85) brightness(0.9);
+}
+
+/* Public pages are set entirely in the serif, like a printed journal. */
+.journal {
+  font-family: var(--font-serif);
+  font-variant-numeric: oldstyle-nums proportional-nums;
+  font-feature-settings: 'kern', 'liga', 'onum';
+  line-height: 1.45;
+}
+
+/* Markdown written in the admin panel (the About page). */
+.prose-journal > * + * {
+  margin-top: 1.25rem;
+}
+
+.prose-journal :is(h1, h2, h3, h4) {
+  font-family: var(--font-serif);
+  color: var(--ui-text-highlighted);
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+
+.prose-journal :is(h1, h2) {
+  font-size: 1.875rem;
+  margin-top: 2.5rem;
+}
+
+.prose-journal :is(h3, h4) {
+  font-size: 1.375rem;
+  margin-top: 2rem;
+}
+
+.prose-journal a {
+  color: var(--ui-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.prose-journal ul {
+  list-style: disc;
+  padding-left: 1.5rem;
+}
+
+.prose-journal ol {
+  list-style: decimal;
+  padding-left: 1.5rem;
+}
+
+.prose-journal li + li {
+  margin-top: 0.25rem;
+}
+
+.prose-journal blockquote {
+  border-left: 2px solid var(--ui-border-accented);
+  padding-left: 1rem;
+  font-style: italic;
+}
+
+.prose-journal strong {
+  color: var(--ui-text-highlighted);
+}
+
+.prose-journal hr {
+  border-color: var(--ui-border);
+}
+
+.prose-journal code {
+  font-size: 0.875em;
+  background: var(--ui-bg-elevated);
+  border-radius: 0.25rem;
+  padding: 0.1em 0.3em;
+}
+
+.prose-journal img {
+  max-width: 100%;
+  border-radius: var(--ui-radius);
 }

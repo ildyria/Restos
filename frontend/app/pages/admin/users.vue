@@ -2,7 +2,7 @@
 import type { User } from '~~/shared/types'
 
 definePageMeta({ layout: 'admin', middleware: 'admin' })
-useSeoMeta({ title: 'Admins — Restos admin', robots: 'noindex' })
+useSeoMeta({ title: `Admins — ${SITE_NAME} admin`, robots: 'noindex' })
 
 const toast = useToast()
 const { user: me } = useAuth()

@@ -4,7 +4,7 @@ import type { Photo, RestaurantDetail } from '~~/shared/types'
 const route = useRoute()
 const { data: r, error } = await useFetch<RestaurantDetail>(`/api/restaurants/${route.params.slug}`)
 
-useSeoMeta({ title: () => (r.value ? `${r.value.name} — Restos` : 'Restos'), description: () => r.value?.review.slice(0, 160) })
+useSeoMeta({ title: () => (r.value ? `${r.value.name} — ${SITE_NAME}` : SITE_NAME), description: () => r.value?.review.slice(0, 160) })
 
 // One flat gallery so the lightbox can step through every dish photo of this restaurant.
 const gallery = computed(() => {
@@ -13,6 +13,7 @@ const gallery = computed(() => {
     for (const d of v.dishes) {
       for (const p of d.photos) items.push({ photo: p, caption: `${d.name} · ${formatDate(v.visited_on)}` })
     }
+    for (const p of v.photos) items.push({ photo: p, caption: formatDate(v.visited_on) })
   }
   return items
 })
@@ -109,6 +110,19 @@ const courseLabel = (c: string | null) => COURSES.find(x => x.value === c)?.labe
               <p v-if="d.notes" class="mt-1 text-sm text-muted">{{ d.notes }}</p>
             </li>
           </ul>
+
+          <div v-if="v.photos.length" class="mt-5 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+            <button
+              v-for="p in v.photos"
+              :key="p.id"
+              type="button"
+              class="aspect-[4/3] cursor-zoom-in overflow-hidden rounded-md bg-elevated"
+              :aria-label="`View photo from ${formatDate(v.visited_on)}`"
+              @click="openPhoto(p)"
+            >
+              <img :src="mediaUrl(p.key)" :alt="`Photo from ${formatDate(v.visited_on)}`" class="size-full object-cover transition-transform duration-500 hover:scale-[1.03]" loading="lazy">
+            </button>
+          </div>
         </li>
       </ol>
     </section>

@@ -12,6 +12,7 @@ export default defineNuxtConfig({
 
   fonts: {
     families: [
+      { name: 'EB Garamond', provider: 'google', weights: [400], styles: ['normal', 'italic'] },
       { name: 'Fraunces', provider: 'google', weights: [400, 500, 600], styles: ['normal', 'italic'] },
       { name: 'Inter', provider: 'google', weights: [400, 500, 600] }
     ]
@@ -22,7 +23,7 @@ export default defineNuxtConfig({
   app: {
     head: {
       htmlAttrs: { lang: 'en' },
-      title: 'Restos',
+      title: 'À\u00a0table\u202f!',
       meta: [{ name: 'viewport', content: 'width=device-width, initial-scale=1' }],
       link: [{ rel: 'icon', href: '/favicon.svg', type: 'image/svg+xml' }]
     }

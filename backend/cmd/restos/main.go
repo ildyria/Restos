@@ -76,6 +76,8 @@ func serve(cfg config.Config) error {
 		Store: st,
 		Auth:  auth.New(st, cfg.CookieSecure),
 		Media: media.Store{Dir: cfg.MediaDir()},
+		// Every account is a full admin, so open sign-up is opt-in.
+		Registration: cfg.Registration,
 	}).Routes()
 
 	mux := http.NewServeMux()

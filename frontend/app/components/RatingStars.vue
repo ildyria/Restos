@@ -12,7 +12,7 @@ const path = 'M12 2.5l2.94 5.96 6.58.96-4.76 4.64 1.12 6.55L12 17.52l-5.88 3.09 
     role="img"
     :aria-label="value == null ? 'Not rated' : `${value} out of 5`"
   >
-    <span class="flex text-stone-300 dark:text-stone-700">
+    <span class="flex text-neutral-300 dark:text-neutral-700">
       <svg v-for="i in 5" :key="i" :width="size" :height="size" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path :d="path" /></svg>
     </span>
     <span class="absolute inset-y-0 left-0 flex overflow-hidden text-primary" :style="{ width: `${pct}%` }">

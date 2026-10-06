@@ -9,6 +9,8 @@ type Config struct {
 	Addr         string
 	DataDir      string
 	CookieSecure bool
+	// Registration lets anyone create an account (every account is a full admin).
+	Registration bool
 }
 
 func Load() Config {
@@ -16,6 +18,7 @@ func Load() Config {
 		Addr:         env("RESTOS_ADDR", ":8080"),
 		DataDir:      env("RESTOS_DATA_DIR", "./data"),
 		CookieSecure: os.Getenv("RESTOS_COOKIE_SECURE") == "true",
+		Registration: os.Getenv("RESTOS_REGISTRATION") == "true",
 	}
 }
 

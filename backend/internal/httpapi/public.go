@@ -35,7 +35,20 @@ func (s *Server) listCuisines(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-var mediaFile = regexp.MustCompile(`^[0-9a-f]{24}\.jpg$`)
+// listPeople returns the names of everyone who has scored a restaurant (never emails).
+func (s *Server) listPeople(w http.ResponseWriter, r *http.Request) error {
+	p, err := s.Store.People()
+	if err != nil {
+		return err
+	}
+	writeJSON(w, http.StatusOK, p)
+	return nil
+}
+
+var (
+	mediaKey  = regexp.MustCompile(`^[0-9a-f]{24}$`)
+	mediaFile = regexp.MustCompile(`^[0-9a-f]{24}\.jpg$`)
+)
 
 func (s *Server) serveMedia(w http.ResponseWriter, r *http.Request) {
 	kind, file := r.PathValue("kind"), r.PathValue("file")

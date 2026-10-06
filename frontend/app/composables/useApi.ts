@@ -39,10 +39,20 @@ export function useAuth() {
     user.value = await api<User>('/api/auth/login', { method: 'POST', body: { email, password } })
   }
 
+  async function register(input: { name: string, email: string, password: string }) {
+    user.value = await api<User>('/api/auth/register', { method: 'POST', body: input })
+    checked.value = true
+  }
+
   async function logout() {
     await api('/api/auth/logout', { method: 'POST' })
     user.value = null
   }
 
-  return { user, checked, refresh, login, logout }
+  return { user, checked, refresh, login, register, logout }
+}
+
+/** Whether public sign-up is open (RESTOS_REGISTRATION on the server). */
+export function useAuthConfig() {
+  return useFetch<{ registration: boolean }>('/api/auth/config', { key: 'auth-config', default: () => ({ registration: false }) })
 }

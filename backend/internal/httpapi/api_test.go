@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"restos/internal/auth"
 	"restos/internal/db"
@@ -26,7 +27,7 @@ type env struct {
 	cookie *http.Cookie
 }
 
-func newEnv(t *testing.T) *env {
+func newEnv(t *testing.T, opts ...func(*Server)) *env {
 	t.Helper()
 	dir := t.TempDir()
 	st, err := db.Open(filepath.Join(dir, "t.db"))
@@ -39,6 +40,9 @@ func newEnv(t *testing.T) *env {
 		t.Fatal(err)
 	}
 	s := &Server{Store: st, Auth: auth.New(st, false), Media: media.Store{Dir: filepath.Join(dir, "media")}}
+	for _, o := range opts {
+		o(s)
+	}
 	return &env{t: t, srv: s.Routes(), media: filepath.Join(dir, "media")}
 }
 
@@ -133,8 +137,12 @@ func TestValidation(t *testing.T) {
 	e.login()
 	for name, body := range map[string]map[string]any{
 		"empty name":   {"name": "  "},
-		"bad rating":   {"name": "x", "rating_food": 4.3},
-		"rating range": {"name": "x", "rating_food": 6},
+		"bad rating":   {"name": "x", "scores": []map[string]any{{"user_id": 1, "rating_food": 4.3}}},
+		"rating range": {"name": "x", "scores": []map[string]any{{"user_id": 1, "rating_food": 6}}},
+		"dup person":   {"name": "x", "scores": []map[string]any{{"user_id": 1, "rating_food": 3}, {"user_id": 1, "rating_food": 4}}},
+		"no person":    {"name": "x", "scores": []map[string]any{{"user_id": 42, "rating_food": 3}}},
+		"half coords":  {"name": "x", "latitude": 51},
+		"bad coords":   {"name": "x", "latitude": 91, "longitude": 3},
 		"bad price":    {"name": "x", "price_level": 9},
 		"bad stars":    {"name": "x", "michelin_stars": 4},
 		"bad website":  {"name": "x", "website": "javascript:alert(1)"},
@@ -143,7 +151,7 @@ func TestValidation(t *testing.T) {
 			t.Errorf("%s: code = %d", name, rec.Code)
 		}
 	}
-	if rec := e.do("POST", "/api/admin/restaurants", map[string]any{"name": "ok", "rating_food": 3.5}, true); rec.Code != 201 {
+	if rec := e.do("POST", "/api/admin/restaurants", map[string]any{"name": "ok", "scores": []map[string]any{{"user_id": 1, "rating_food": 3.5, "would_return": true}}}, true); rec.Code != 201 {
 		t.Fatalf("valid half-star = %d", rec.Code)
 	}
 }
@@ -176,15 +184,14 @@ func TestFullFlowWithUpload(t *testing.T) {
 	e.login()
 
 	var rest db.RestaurantDetail
-	rec := e.do("POST", "/api/admin/restaurants", map[string]any{"name": "Chez Test", "cuisine": "French", "rating_food": 4.5}, true)
+	rec := e.do("POST", "/api/admin/restaurants", map[string]any{"name": "Chez Test", "cuisine": "French", "scores": []map[string]any{{"user_id": 1, "rating_food": 4.5}}}, true)
 	json.Unmarshal(rec.Body.Bytes(), &rest)
 	base := "/api/admin/restaurants/"
 
-	rec = e.do("POST", base+itoa(rest.ID)+"/visits", map[string]any{"visited_on": "2026-03-01", "meal": "lunch"}, true)
-	if rec.Code != 201 {
-		t.Fatalf("visit = %d %s", rec.Code, rec.Body)
+	// A restaurant starts with one visit (today, by default).
+	if len(rest.Visits) != 1 || rest.Visits[0].VisitedOn != time.Now().Format("2006-01-02") {
+		t.Fatalf("default first visit = %+v", rest.Visits)
 	}
-	json.Unmarshal(rec.Body.Bytes(), &rest)
 	vid := rest.Visits[0].ID
 
 	rec = e.do("POST", "/api/admin/visits/"+itoa(vid)+"/dishes", map[string]any{"name": "Steak frites", "course": "main"}, true)
@@ -213,8 +220,40 @@ func TestFullFlowWithUpload(t *testing.T) {
 		}
 	}
 
+	// Photos can go straight onto the visit, then be captioned with a dish by name.
+	rd, ct = multipartBody(t, map[string][]byte{"plain.jpg": jpegBytes(40, 30)})
+	if rec = e.doReader("POST", "/api/admin/visits/"+itoa(vid)+"/photos", rd, ct, true); rec.Code != 201 {
+		t.Fatalf("visit upload = %d %s", rec.Code, rec.Body)
+	}
+	rest = db.RestaurantDetail{}
+	json.Unmarshal(rec.Body.Bytes(), &rest)
+	if len(rest.Visits[0].Photos) != 1 || rest.Visits[0].Photos[0].DishID != nil {
+		t.Fatalf("uncaptioned photos = %+v", rest.Visits[0].Photos)
+	}
+	loose := rest.Visits[0].Photos[0].ID
+	if rec = e.do("PUT", "/api/admin/photos/"+itoa(loose), map[string]string{"dish": "steak FRITES"}, true); rec.Code != 200 {
+		t.Fatalf("caption = %d %s", rec.Code, rec.Body)
+	}
+	rest = db.RestaurantDetail{}
+	json.Unmarshal(rec.Body.Bytes(), &rest)
+	if len(rest.Visits[0].Photos) != 0 || len(rest.Visits[0].Dishes) != 1 || len(rest.Visits[0].Dishes[0].Photos) != 2 {
+		t.Fatalf("caption should reuse the existing dish: %+v", rest.Visits[0])
+	}
+	if rec = e.do("PUT", "/api/admin/photos/"+itoa(loose), map[string]string{"dish": strings.Repeat("x", 201)}, true); rec.Code != 400 {
+		t.Fatalf("long caption = %d", rec.Code)
+	}
+	// Deleting the dish keeps both photos on the visit.
+	if rec = e.do("DELETE", "/api/admin/dishes/"+itoa(did), nil, true); rec.Code != 200 {
+		t.Fatalf("delete dish = %d", rec.Code)
+	}
+	rest = db.RestaurantDetail{}
+	json.Unmarshal(rec.Body.Bytes(), &rest)
+	if len(rest.Visits[0].Photos) != 2 || len(rest.Visits[0].Dishes) != 0 {
+		t.Fatalf("after dish delete = %+v", rest.Visits[0])
+	}
+
 	rd, ct = multipartBody(t, map[string][]byte{"notes.txt": []byte("hello")})
-	if rec = e.doReader("POST", "/api/admin/dishes/"+itoa(did)+"/photos", rd, ct, true); rec.Code != 415 && rec.Code != 400 {
+	if rec = e.doReader("POST", "/api/admin/visits/"+itoa(vid)+"/photos", rd, ct, true); rec.Code != 415 && rec.Code != 400 {
 		t.Fatalf("non-image upload = %d", rec.Code)
 	}
 
@@ -269,3 +308,154 @@ func itoa(n int64) string {
 }
 
 func mustJSON(v any) []byte { b, _ := json.Marshal(v); return b }
+
+func TestRegistration(t *testing.T) {
+	body := map[string]string{"email": "Lea@Example.com", "name": " Lea ", "password": "long-enough"}
+
+	closed := newEnv(t)
+	if rec := closed.do("GET", "/api/auth/config", nil, false); !strings.Contains(rec.Body.String(), `"registration":false`) {
+		t.Fatalf("config = %s", rec.Body)
+	}
+	if rec := closed.do("POST", "/api/auth/register", body, true); rec.Code != 404 {
+		t.Fatalf("register while disabled = %d", rec.Code)
+	}
+
+	e := newEnv(t, func(s *Server) { s.Registration = true })
+	if rec := e.do("GET", "/api/auth/config", nil, false); !strings.Contains(rec.Body.String(), `"registration":true`) {
+		t.Fatalf("config = %s", rec.Body)
+	}
+	if rec := e.do("POST", "/api/auth/register", body, false); rec.Code != 403 {
+		t.Fatalf("register without CSRF header = %d", rec.Code)
+	}
+	for name, bad := range map[string]map[string]string{
+		"short password": {"email": "a@example.com", "name": "A", "password": "short"},
+		"long password":  {"email": "a@example.com", "name": "A", "password": strings.Repeat("x", 73)},
+		"no name":        {"email": "a@example.com", "name": "  ", "password": "long-enough"},
+		"bad email":      {"email": "nope", "name": "A", "password": "long-enough"},
+		"taken email":    {"email": "admin@example.com", "name": "A", "password": "long-enough"},
+	} {
+		if rec := e.do("POST", "/api/auth/register", bad, true); rec.Code != 400 && rec.Code != 409 {
+			t.Errorf("%s: code = %d", name, rec.Code)
+		}
+	}
+	rec := e.do("POST", "/api/auth/register", body, true)
+	if rec.Code != 201 || strings.Contains(rec.Body.String(), "password") {
+		t.Fatalf("register = %d %s", rec.Code, rec.Body)
+	}
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == auth.CookieName {
+			e.cookie = c
+		}
+	}
+	if rec := e.do("GET", "/api/auth/me", nil, false); rec.Code != 200 || !strings.Contains(rec.Body.String(), `"name":"Lea"`) {
+		t.Fatalf("me after register = %d %s", rec.Code, rec.Body)
+	}
+	// The new account is a working admin.
+	if rec := e.do("POST", "/api/admin/restaurants", map[string]any{"name": "By Lea"}, true); rec.Code != 201 {
+		t.Fatalf("admin call as new user = %d", rec.Code)
+	}
+}
+
+func TestFirstVisitOverride(t *testing.T) {
+	e := newEnv(t)
+	e.login()
+	var rest db.RestaurantDetail
+	rec := e.do("POST", "/api/admin/restaurants", map[string]any{"name": "Later", "first_visit": map[string]string{"visited_on": "2025-12-24", "meal": "dinner"}}, true)
+	json.Unmarshal(rec.Body.Bytes(), &rest)
+	if rec.Code != 201 || len(rest.Visits) != 1 || rest.Visits[0].VisitedOn != "2025-12-24" || rest.Visits[0].Meal != "dinner" {
+		t.Fatalf("first visit = %d %+v", rec.Code, rest.Visits)
+	}
+	if rec := e.do("POST", "/api/admin/restaurants", map[string]any{"name": "Bad", "first_visit": map[string]string{"visited_on": "soon", "meal": "dinner"}}, true); rec.Code != 400 {
+		t.Fatalf("bad first visit = %d", rec.Code)
+	}
+	// Updating never adds visits.
+	if rec := e.do("PUT", "/api/admin/restaurants/"+itoa(rest.ID), map[string]any{"name": "Later", "first_visit": map[string]string{"visited_on": "2025-01-01", "meal": "lunch"}}, true); rec.Code != 200 {
+		t.Fatalf("update = %d", rec.Code)
+	}
+	if d, _ := e.get(rest.Slug); len(d.Visits) != 1 {
+		t.Fatalf("update added a visit: %+v", d.Visits)
+	}
+}
+
+func (e *env) get(slug string) (db.RestaurantDetail, int) {
+	var d db.RestaurantDetail
+	rec := e.do("GET", "/api/restaurants/"+slug, nil, false)
+	json.Unmarshal(rec.Body.Bytes(), &d)
+	return d, rec.Code
+}
+
+func TestSitePreview(t *testing.T) {
+	img := jpegBytes(1200, 630)
+	website := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/":
+			w.Write([]byte(`<head><meta property="og:site_name" content="Chez Test"><meta property="og:image" content="/og.jpg"></head>`))
+		case "/og.jpg":
+			w.Write(img)
+		case "/bare":
+			w.Write([]byte(`<title>Bare</title>`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer website.Close()
+	// The test website is on loopback, which the real client refuses; use a plain one.
+	e := newEnv(t, func(s *Server) { s.Fetch = website.Client() })
+	e.login()
+
+	var prev struct {
+		Title    string `json:"title"`
+		ImageKey string `json:"image_key"`
+		Width    int    `json:"width"`
+		Note     string `json:"note"`
+	}
+	rec := e.do("POST", "/api/admin/site-preview", map[string]string{"url": website.URL + "/"}, true)
+	json.Unmarshal(rec.Body.Bytes(), &prev)
+	if rec.Code != 200 || prev.Title != "Chez Test" || prev.ImageKey == "" || prev.Width != 1200 {
+		t.Fatalf("preview = %d %s", rec.Code, rec.Body)
+	}
+	if _, err := os.Stat(filepath.Join(e.media, "thumb", prev.ImageKey+".jpg")); err != nil {
+		t.Fatalf("preview image not stored: %v", err)
+	}
+
+	rec = e.do("POST", "/api/admin/site-preview", map[string]string{"url": website.URL + "/bare"}, true)
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"title":"Bare"`) || strings.Contains(rec.Body.String(), "image_key") {
+		t.Fatalf("no-image preview = %d %s", rec.Code, rec.Body)
+	}
+	for _, bad := range []string{"ftp://x", "", "not a url"} {
+		if rec := e.do("POST", "/api/admin/site-preview", map[string]string{"url": bad}, true); rec.Code != 400 {
+			t.Errorf("%q: code = %d", bad, rec.Code)
+		}
+	}
+	if rec := e.do("POST", "/api/admin/site-preview", map[string]string{"url": website.URL + "/missing"}, true); rec.Code != 422 {
+		t.Fatalf("404 website = %d", rec.Code)
+	}
+
+	// Saving the new restaurant claims the picture, which becomes its cover.
+	var rest db.RestaurantDetail
+	rec = e.do("POST", "/api/admin/restaurants", map[string]any{"name": "Chez Test", "website": website.URL, "site_image_key": prev.ImageKey}, true)
+	json.Unmarshal(rec.Body.Bytes(), &rest)
+	if rec.Code != 201 || rest.SitePhoto == nil || rest.SitePhoto.Key != prev.ImageKey || rest.CoverKey == nil || *rest.CoverKey != prev.ImageKey {
+		t.Fatalf("create with site image = %d %s", rec.Code, rec.Body)
+	}
+	if rec := e.do("POST", "/api/admin/restaurants", map[string]any{"name": "Again", "site_image_key": prev.ImageKey}, true); rec.Code != 400 {
+		t.Fatalf("reusing a claimed picture = %d", rec.Code)
+	}
+	if rec := e.do("POST", "/api/admin/restaurants", map[string]any{"name": "Bad", "site_image_key": "../../etc/passwd"}, true); rec.Code != 400 {
+		t.Fatalf("bad key = %d", rec.Code)
+	}
+	// Removing it on update deletes the file.
+	rec = e.do("PUT", "/api/admin/restaurants/"+itoa(rest.ID), map[string]any{"name": "Chez Test", "site_image_key": ""}, true)
+	rest = db.RestaurantDetail{}
+	json.Unmarshal(rec.Body.Bytes(), &rest)
+	if rec.Code != 200 || rest.SitePhoto != nil {
+		t.Fatalf("remove = %d %s", rec.Code, rec.Body)
+	}
+	if _, err := os.Stat(filepath.Join(e.media, "full", prev.ImageKey+".jpg")); !os.IsNotExist(err) {
+		t.Fatalf("removed picture still on disk (err=%v)", err)
+	}
+	// Cover can be reset to automatic.
+	if rec := e.do("PUT", "/api/admin/restaurants/"+itoa(rest.ID)+"/cover", map[string]any{"photo_id": nil}, true); rec.Code != 200 {
+		t.Fatalf("automatic cover = %d", rec.Code)
+	}
+}

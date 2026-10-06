@@ -8,6 +8,7 @@ const items: NavigationMenuItem[][] = [[
   { label: 'Restaurants', icon: 'i-lucide-utensils', to: '/admin', exact: true },
   { label: 'New restaurant', icon: 'i-lucide-plus', to: '/admin/restaurants/new' },
   { label: 'Ranking', icon: 'i-lucide-list-ordered', to: '/admin/ranking' },
+  { label: 'About page', icon: 'i-lucide-notebook-pen', to: '/admin/about' },
   { label: 'Admins', icon: 'i-lucide-users', to: '/admin/users' }
 ], [
   { label: 'View site', icon: 'i-lucide-external-link', to: '/' }
@@ -27,7 +28,7 @@ async function signOut() {
   <UDashboardGroup>
     <UDashboardSidebar collapsible resizable :ui="{ footer: 'border-t border-default' }">
       <template #header>
-        <NuxtLink to="/admin" class="font-display px-2 text-xl font-medium">Restos <span class="text-sm text-dimmed">admin</span></NuxtLink>
+        <NuxtLink to="/" class="font-display px-2 text-xl font-medium" title="Back to the site">{{ SITE_NAME }} <span class="text-sm text-dimmed">admin</span></NuxtLink>
       </template>
 
       <template #default="{ collapsed }">

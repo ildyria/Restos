@@ -16,6 +16,10 @@ type Server struct {
 	Store *db.Store
 	Auth  *auth.Auth
 	Media media.Store
+	// Registration enables public sign-up at POST /api/auth/register.
+	Registration bool
+	// Fetch is the client for reading restaurant websites; nil uses site.SafeClient().
+	Fetch *http.Client
 }
 
 type apiError struct {
@@ -40,6 +44,10 @@ func wrap(h handlerFunc) http.Handler {
 		switch {
 		case errors.As(err, &ae):
 			writeJSON(w, ae.Status, map[string]string{"error": ae.Msg})
+		case errors.Is(err, db.ErrUnknownMedia):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "the website picture expired, enter the website again"})
+		case errors.Is(err, db.ErrUnknownUser):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "scores refer to an unknown person"})
 		case errors.Is(err, db.ErrNotFound):
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
 		default:
@@ -79,12 +87,16 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("GET /api/restaurants", wrap(s.listRestaurants))
 	mux.Handle("GET /api/restaurants/{slug}", wrap(s.getRestaurant))
 	mux.Handle("GET /api/cuisines", wrap(s.listCuisines))
+	mux.Handle("GET /api/people", wrap(s.listPeople))
+	mux.Handle("GET /api/about", wrap(s.getAbout))
 	mux.Handle("GET /media/{kind}/{file}", http.HandlerFunc(s.serveMedia))
 
 	// Auth.
 	mux.Handle("POST /api/auth/login", auth.CSRF(wrap(s.login)))
 	mux.Handle("POST /api/auth/logout", auth.CSRF(wrap(s.logout)))
 	mux.Handle("GET /api/auth/me", wrap(s.me))
+	mux.Handle("GET /api/auth/config", wrap(s.authConfig))
+	mux.Handle("POST /api/auth/register", auth.CSRF(wrap(s.register)))
 
 	// Admin.
 	admin := http.NewServeMux()
@@ -100,9 +112,17 @@ func (s *Server) Routes() http.Handler {
 	admin.Handle("POST /api/admin/visits/{id}/dishes", wrap(s.createDish))
 	admin.Handle("PUT /api/admin/dishes/{id}", wrap(s.updateDish))
 	admin.Handle("DELETE /api/admin/dishes/{id}", wrap(s.deleteDish))
-	admin.Handle("POST /api/admin/dishes/{id}/photos", wrap(s.uploadPhotos))
+	admin.Handle("POST /api/admin/dishes/{id}/photos", wrap(s.uploadDishPhotos))
+	admin.Handle("POST /api/admin/visits/{id}/photos", wrap(s.uploadVisitPhotos))
+	admin.Handle("PUT /api/admin/photos/{id}", wrap(s.setPhotoDish))
+	admin.Handle("POST /api/admin/site-preview", wrap(s.sitePreview))
 	admin.Handle("PUT /api/admin/photos/order", wrap(s.reorderPhotos))
 	admin.Handle("DELETE /api/admin/photos/{id}", wrap(s.deletePhoto))
+	admin.Handle("GET /api/admin/about", wrap(s.adminGetAbout))
+	admin.Handle("PUT /api/admin/about", wrap(s.setAbout))
+	admin.Handle("POST /api/admin/about/preview", wrap(s.previewAbout))
+	admin.Handle("POST /api/admin/about/photo", wrap(s.uploadAboutPhoto))
+	admin.Handle("DELETE /api/admin/about/photo", wrap(s.deleteAboutPhoto))
 	admin.Handle("GET /api/admin/users", wrap(s.listUsers))
 	admin.Handle("POST /api/admin/users", wrap(s.createUser))
 	admin.Handle("DELETE /api/admin/users/{id}", wrap(s.deleteUser))

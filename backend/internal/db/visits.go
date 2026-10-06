@@ -1,11 +1,19 @@
 package db
 
-import "database/sql"
+import (
+	"database/sql"
+	"strings"
+)
 
+// Photo belongs to a restaurant, usually through a visit; DishID says which dish it shows
+// (its caption), if any. A photo with no visit is the picture taken from the website (Source "website").
 type Photo struct {
-	ID       int64  `json:"id"`
-	DishID   int64  `json:"dish_id"`
-	Key      string `json:"key"`
+	ID           int64  `json:"id"`
+	RestaurantID int64  `json:"restaurant_id"`
+	VisitID      *int64 `json:"visit_id"`
+	DishID       *int64 `json:"dish_id"`
+	Source       string `json:"source"`
+	Key          string `json:"key"`
 	Width    int    `json:"width"`
 	Height   int    `json:"height"`
 	Position int    `json:"position"`
@@ -28,6 +36,8 @@ type Visit struct {
 	Meal         string `json:"meal"`
 	Notes        string `json:"notes"`
 	Dishes       []Dish `json:"dishes"`
+	// Photos not (yet) linked to a dish; linked ones are under their dish.
+	Photos []Photo `json:"photos"`
 }
 
 type VisitInput struct {
@@ -52,7 +62,7 @@ func (s *Store) visitsFor(restaurantID int64) ([]Visit, error) {
 		return nil, err
 	}
 	for rows.Next() {
-		v := Visit{Dishes: []Dish{}}
+		v := Visit{Dishes: []Dish{}, Photos: []Photo{}}
 		if err := rows.Scan(&v.ID, &v.RestaurantID, &v.VisitedOn, &v.Meal, &v.Notes); err != nil {
 			rows.Close()
 			return nil, err
@@ -89,27 +99,47 @@ func (s *Store) visitsFor(restaurantID int64) ([]Visit, error) {
 		return nil, err
 	}
 
-	prows, err := s.DB.Query(`SELECT p.id, p.dish_id, p.file_key, p.width, p.height, p.position
-		FROM photos p JOIN dishes d ON d.id = p.dish_id JOIN visits v ON v.id = d.visit_id
-		WHERE v.restaurant_id = ? ORDER BY p.position, p.id`, restaurantID)
+	prows, err := s.DB.Query(`SELECT `+photoCols+` FROM photos p
+		WHERE p.restaurant_id = ? AND p.visit_id IS NOT NULL ORDER BY p.position, p.id`, restaurantID)
 	if err != nil {
 		return nil, err
 	}
 	defer prows.Close()
 	for prows.Next() {
-		var p Photo
-		if err := prows.Scan(&p.ID, &p.DishID, &p.Key, &p.Width, &p.Height, &p.Position); err != nil {
+		p, err := scanPhoto(prows)
+		if err != nil {
 			return nil, err
 		}
-		ix := dishIdx[p.DishID]
+		if p.DishID == nil {
+			v := &visits[byVisit[*p.VisitID]]
+			v.Photos = append(v.Photos, p)
+			continue
+		}
+		ix := dishIdx[*p.DishID]
 		d := &visits[ix[0]].Dishes[ix[1]]
 		d.Photos = append(d.Photos, p)
 	}
 	return visits, prows.Err()
 }
 
+const photoCols = `p.id, p.restaurant_id, p.visit_id, p.dish_id, p.source, p.file_key, p.width, p.height, p.position`
+
+func scanPhoto(sc scanner) (Photo, error) {
+	var p Photo
+	err := sc.Scan(&p.ID, &p.RestaurantID, &p.VisitID, &p.DishID, &p.Source, &p.Key, &p.Width, &p.Height, &p.Position)
+	return p, err
+}
+
 func (s *Store) CreateVisit(restaurantID int64, in VisitInput) (int64, error) {
-	res, err := s.DB.Exec(`INSERT INTO visits(restaurant_id, visited_on, meal, notes) VALUES(?,?,?,?)`,
+	return createVisit(s.DB, restaurantID, in)
+}
+
+type execer interface {
+	Exec(query string, args ...any) (sql.Result, error)
+}
+
+func createVisit(db execer, restaurantID int64, in VisitInput) (int64, error) {
+	res, err := db.Exec(`INSERT INTO visits(restaurant_id, visited_on, meal, notes) VALUES(?,?,?,?)`,
 		restaurantID, in.VisitedOn, in.Meal, in.Notes)
 	if err != nil {
 		return 0, err
@@ -134,11 +164,15 @@ func (s *Store) VisitByID(id int64) (Visit, error) {
 
 func (s *Store) DeleteVisit(id int64) ([]string, error) {
 	return s.deleteWithKeys(`DELETE FROM visits WHERE id=?`,
-		`SELECT p.file_key FROM photos p JOIN dishes d ON d.id = p.dish_id WHERE d.visit_id = ?`, id)
+		`SELECT file_key FROM photos WHERE visit_id = ?`, id)
 }
 
 func (s *Store) CreateDish(visitID int64, in DishInput) (int64, error) {
-	res, err := s.DB.Exec(`INSERT INTO dishes(visit_id, name, course, notes, position)
+	return createDish(s.DB, visitID, in)
+}
+
+func createDish(db execer, visitID int64, in DishInput) (int64, error) {
+	res, err := db.Exec(`INSERT INTO dishes(visit_id, name, course, notes, position)
 		VALUES(?,?,?,?, (SELECT COALESCE(MAX(position),0)+1 FROM dishes WHERE visit_id = ?))`,
 		visitID, in.Name, in.Course, in.Notes, visitID)
 	if err != nil {
@@ -162,22 +196,68 @@ func (s *Store) DishByID(id int64) (Dish, error) {
 	return d, notFound(err)
 }
 
-func (s *Store) DeleteDish(id int64) ([]string, error) {
-	return s.deleteWithKeys(`DELETE FROM dishes WHERE id=?`, `SELECT file_key FROM photos WHERE dish_id = ?`, id)
+// DeleteDish removes the dish; its photos stay on the visit without a caption.
+func (s *Store) DeleteDish(id int64) error {
+	res, err := s.DB.Exec(`DELETE FROM dishes WHERE id=?`, id)
+	if err != nil {
+		return err
+	}
+	return affected(res)
 }
 
-func (s *Store) AddPhoto(dishID int64, key string, w, h int) (Photo, error) {
-	res, err := s.DB.Exec(`INSERT INTO photos(dish_id, file_key, width, height, position)
-		VALUES(?,?,?,?, (SELECT COALESCE(MAX(position),0)+1 FROM photos WHERE dish_id = ?))`,
-		dishID, key, w, h, dishID)
+// AddPhoto attaches a photo to a visit, optionally already showing a dish of that visit.
+func (s *Store) AddPhoto(visitID int64, dishID *int64, key string, w, h int) (Photo, error) {
+	res, err := s.DB.Exec(`INSERT INTO photos(restaurant_id, visit_id, dish_id, file_key, width, height, position)
+		VALUES((SELECT restaurant_id FROM visits WHERE id = ?),?,?,?,?,?, (SELECT COALESCE(MAX(position),0)+1 FROM photos WHERE visit_id = ?))`,
+		visitID, visitID, dishID, key, w, h, visitID)
 	if err != nil {
 		return Photo{}, err
 	}
 	id, _ := res.LastInsertId()
-	var p Photo
-	err = s.DB.QueryRow(`SELECT id, dish_id, file_key, width, height, position FROM photos WHERE id=?`, id).
-		Scan(&p.ID, &p.DishID, &p.Key, &p.Width, &p.Height, &p.Position)
-	return p, err
+	return s.PhotoByID(id)
+}
+
+// SetPhotoDish captions a photo with a dish of its visit, by name: an existing dish with that
+// name (case-insensitive) is reused, otherwise one is created; an empty name clears it.
+// A dish left without photos that only ever served as a caption (no course, no notes) is removed.
+func (s *Store) SetPhotoDish(photoID int64, name string) error {
+	name = strings.TrimSpace(name)
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var visitID *int64
+	var oldDish *int64
+	if err := tx.QueryRow(`SELECT visit_id, dish_id FROM photos WHERE id = ?`, photoID).Scan(&visitID, &oldDish); err != nil {
+		return notFound(err)
+	}
+	if visitID == nil {
+		return ErrNotFound // the website picture shows no dish
+	}
+	var newDish *int64
+	if name != "" {
+		var id int64
+		err := tx.QueryRow(`SELECT id FROM dishes WHERE visit_id = ? AND name = ? COLLATE NOCASE ORDER BY position, id LIMIT 1`,
+			*visitID, name).Scan(&id)
+		if err == sql.ErrNoRows {
+			id, err = createDish(tx, *visitID, DishInput{Name: name})
+		}
+		if err != nil {
+			return err
+		}
+		newDish = &id
+	}
+	if _, err := tx.Exec(`UPDATE photos SET dish_id = ? WHERE id = ?`, newDish, photoID); err != nil {
+		return err
+	}
+	if oldDish != nil && (newDish == nil || *oldDish != *newDish) {
+		if _, err := tx.Exec(`DELETE FROM dishes WHERE id = ? AND course IS NULL AND notes = ''
+			AND NOT EXISTS (SELECT 1 FROM photos WHERE dish_id = dishes.id)`, *oldDish); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func (s *Store) DeletePhoto(id int64) ([]string, error) {
@@ -235,8 +315,6 @@ func clearDanglingCovers(tx *sql.Tx) error {
 }
 
 func (s *Store) PhotoByID(id int64) (Photo, error) {
-	var p Photo
-	err := s.DB.QueryRow(`SELECT id, dish_id, file_key, width, height, position FROM photos WHERE id=?`, id).
-		Scan(&p.ID, &p.DishID, &p.Key, &p.Width, &p.Height, &p.Position)
+	p, err := scanPhoto(s.DB.QueryRow(`SELECT `+photoCols+` FROM photos p WHERE p.id = ?`, id))
 	return p, notFound(err)
 }

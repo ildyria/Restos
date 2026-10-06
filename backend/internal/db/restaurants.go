@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"unicode"
@@ -22,11 +23,47 @@ type Restaurant struct {
 	RatingAmbiance *float64 `json:"rating_ambiance"`
 	RatingValue    *float64 `json:"rating_value"`
 	Overall        *float64 `json:"overall"`
+	Latitude       *float64 `json:"latitude"`
+	Longitude      *float64 `json:"longitude"`
 	Review         string   `json:"review"`
 	RankPosition   *int     `json:"rank_position"`
 	CoverPhotoID   *int64   `json:"cover_photo_id"`
 	CreatedAt      string   `json:"created_at"`
 	UpdatedAt      string   `json:"updated_at"`
+	// Scores holds each person's ratings; the rating_* fields above are their averages.
+	Scores []Score `json:"scores"`
+}
+
+// Score is one person's rating of a restaurant.
+type Score struct {
+	UserID         int64    `json:"user_id"`
+	Name           string   `json:"name"`
+	RatingFood     *float64 `json:"rating_food"`
+	RatingService  *float64 `json:"rating_service"`
+	RatingAmbiance *float64 `json:"rating_ambiance"`
+	RatingValue    *float64 `json:"rating_value"`
+	Overall        *float64 `json:"overall"`
+	WouldReturn    *bool    `json:"would_return"`
+}
+
+// ScoreInput is the editable part of a Score.
+type ScoreInput struct {
+	UserID         int64    `json:"user_id"`
+	RatingFood     *float64 `json:"rating_food"`
+	RatingService  *float64 `json:"rating_service"`
+	RatingAmbiance *float64 `json:"rating_ambiance"`
+	RatingValue    *float64 `json:"rating_value"`
+	WouldReturn    *bool    `json:"would_return"`
+}
+
+func (in ScoreInput) empty() bool {
+	return in.RatingFood == nil && in.RatingService == nil && in.RatingAmbiance == nil && in.RatingValue == nil && in.WouldReturn == nil
+}
+
+// Person is a user who has scored at least one restaurant (public: id and name only).
+type Person struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
 }
 
 // RestaurantInput is the editable subset of a restaurant.
@@ -37,12 +74,16 @@ type RestaurantInput struct {
 	City           string   `json:"city"`
 	Website        string   `json:"website"`
 	PriceLevel     *int     `json:"price_level"`
-	MichelinStars  *int     `json:"michelin_stars"`
-	RatingFood     *float64 `json:"rating_food"`
-	RatingService  *float64 `json:"rating_service"`
-	RatingAmbiance *float64 `json:"rating_ambiance"`
-	RatingValue    *float64 `json:"rating_value"`
-	Review         string   `json:"review"`
+	MichelinStars  *int         `json:"michelin_stars"`
+	Latitude       *float64     `json:"latitude"`
+	Longitude      *float64     `json:"longitude"`
+	Review         string       `json:"review"`
+	Scores         []ScoreInput `json:"scores"`
+	// FirstVisit is only used on creation: the visit to start the restaurant with.
+	FirstVisit *VisitInput `json:"first_visit,omitempty"`
+	// SiteImageKey sets the website picture from a fetched (pending) image: nil leaves it
+	// unchanged, "" removes it.
+	SiteImageKey *string `json:"site_image_key,omitempty"`
 }
 
 type RestaurantSummary struct {
@@ -55,7 +96,9 @@ type RestaurantSummary struct {
 type RestaurantDetail struct {
 	Restaurant
 	CoverKey *string `json:"cover_key"`
-	Visits   []Visit `json:"visits"`
+	// SitePhoto is the picture taken from the restaurant's website, if any.
+	SitePhoto *Photo  `json:"site_photo"`
+	Visits    []Visit `json:"visits"`
 }
 
 type ListFilter struct {
@@ -64,27 +107,34 @@ type ListFilter struct {
 	Cuisine string
 }
 
+// Category ratings are averaged over everyone who scored the restaurant (AVG skips NULLs).
 const restaurantCols = `r.id, r.slug, r.name, r.cuisine, r.address, r.city, r.website, r.price_level, r.michelin_stars,
-	r.rating_food, r.rating_service, r.rating_ambiance, r.rating_value, r.review,
-	r.rank_position, r.cover_photo_id, r.created_at, r.updated_at`
+	(SELECT AVG(rating_food) FROM scores WHERE restaurant_id = r.id) AS avg_food,
+	(SELECT AVG(rating_service) FROM scores WHERE restaurant_id = r.id) AS avg_service,
+	(SELECT AVG(rating_ambiance) FROM scores WHERE restaurant_id = r.id) AS avg_ambiance,
+	(SELECT AVG(rating_value) FROM scores WHERE restaurant_id = r.id) AS avg_value,
+	r.latitude, r.longitude, r.review, r.rank_position, r.cover_photo_id, r.created_at, r.updated_at`
 
-// coverKeySQL resolves the cover: the chosen photo, else the first photo of the latest visit.
+// coverKeySQL resolves the cover: the chosen photo, else the website picture, else the first
+// photo of the latest visit.
 const coverKeySQL = `COALESCE(
 	(SELECT file_key FROM photos WHERE id = r.cover_photo_id),
-	(SELECT p.file_key FROM photos p JOIN dishes d ON d.id = p.dish_id JOIN visits v ON v.id = d.visit_id
-	 WHERE v.restaurant_id = r.id ORDER BY v.visited_on DESC, d.position, p.position LIMIT 1))`
+	(SELECT file_key FROM photos WHERE restaurant_id = r.id AND source = 'website'),
+	(SELECT p.file_key FROM photos p JOIN visits v ON v.id = p.visit_id
+	 WHERE v.restaurant_id = r.id ORDER BY v.visited_on DESC, p.position, p.id LIMIT 1))`
 
 type scanner interface{ Scan(dest ...any) error }
 
 func scanRestaurant(sc scanner, extra ...any) (Restaurant, error) {
 	var r Restaurant
 	dest := []any{&r.ID, &r.Slug, &r.Name, &r.Cuisine, &r.Address, &r.City, &r.Website, &r.PriceLevel, &r.MichelinStars,
-		&r.RatingFood, &r.RatingService, &r.RatingAmbiance, &r.RatingValue, &r.Review,
-		&r.RankPosition, &r.CoverPhotoID, &r.CreatedAt, &r.UpdatedAt}
+		&r.RatingFood, &r.RatingService, &r.RatingAmbiance, &r.RatingValue,
+		&r.Latitude, &r.Longitude, &r.Review, &r.RankPosition, &r.CoverPhotoID, &r.CreatedAt, &r.UpdatedAt}
 	if err := sc.Scan(append(dest, extra...)...); err != nil {
 		return r, err
 	}
 	r.Overall = overall(r.RatingFood, r.RatingService, r.RatingAmbiance, r.RatingValue)
+	r.Scores = []Score{}
 	return r, nil
 }
 
@@ -119,8 +169,8 @@ func (s *Store) ListRestaurants(f ListFilter) ([]RestaurantSummary, error) {
 		q += ` AND r.cuisine = ?`
 		args = append(args, f.Cuisine)
 	}
-	const overallSQL = `((COALESCE(r.rating_food,0)+COALESCE(r.rating_service,0)+COALESCE(r.rating_ambiance,0)+COALESCE(r.rating_value,0)) /
-		NULLIF((r.rating_food IS NOT NULL)+(r.rating_service IS NOT NULL)+(r.rating_ambiance IS NOT NULL)+(r.rating_value IS NOT NULL),0))`
+	const overallSQL = `((COALESCE(avg_food,0)+COALESCE(avg_service,0)+COALESCE(avg_ambiance,0)+COALESCE(avg_value,0)) /
+		NULLIF((avg_food IS NOT NULL)+(avg_service IS NOT NULL)+(avg_ambiance IS NOT NULL)+(avg_value IS NOT NULL),0))`
 	switch f.Sort {
 	case "rating":
 		q += ` ORDER BY ` + overallSQL + ` IS NULL, ` + overallSQL + ` DESC, r.name`
@@ -147,7 +197,66 @@ func (s *Store) ListRestaurants(f ListFilter) ([]RestaurantSummary, error) {
 		sum.Restaurant = r
 		out = append(out, sum)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+	scores, err := s.scoresWhere(`1=1`)
+	if err != nil {
+		return nil, err
+	}
+	for i := range out {
+		if sc, ok := scores[out[i].ID]; ok {
+			out[i].Scores = sc
+		}
+	}
+	return out, nil
+}
+
+// scoresWhere loads per-person scores matching a condition on s (scores) and u (users), keyed by restaurant.
+func (s *Store) scoresWhere(where string, args ...any) (map[int64][]Score, error) {
+	rows, err := s.DB.Query(`SELECT s.restaurant_id, s.user_id, u.name, s.rating_food, s.rating_service, s.rating_ambiance,
+		s.rating_value, s.would_return FROM scores s JOIN users u ON u.id = s.user_id WHERE `+where+` ORDER BY u.id`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int64][]Score{}
+	for rows.Next() {
+		var rid int64
+		var sc Score
+		if err := rows.Scan(&rid, &sc.UserID, &sc.Name, &sc.RatingFood, &sc.RatingService, &sc.RatingAmbiance,
+			&sc.RatingValue, &sc.WouldReturn); err != nil {
+			return nil, err
+		}
+		sc.Overall = overall(sc.RatingFood, sc.RatingService, sc.RatingAmbiance, sc.RatingValue)
+		out[rid] = append(out[rid], sc)
+	}
 	return out, rows.Err()
+}
+
+// People lists the users who have scored at least one restaurant.
+func (s *Store) People() ([]Person, error) {
+	rows, err := s.DB.Query(`SELECT id, name FROM users WHERE id IN (SELECT user_id FROM scores) ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Person{}
+	for rows.Next() {
+		var p Person
+		if err := rows.Scan(&p.ID, &p.Name); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) CountRestaurants() (int, error) {
+	var n int
+	err := s.DB.QueryRow(`SELECT COUNT(*) FROM restaurants`).Scan(&n)
+	return n, err
 }
 
 func (s *Store) Cuisines() ([]string, error) {
@@ -183,6 +292,20 @@ func (s *Store) restaurantDetail(where string, arg any) (RestaurantDetail, error
 		return d, notFound(err)
 	}
 	d.Restaurant = r
+	scores, err := s.scoresWhere(`s.restaurant_id = ?`, r.ID)
+	if err != nil {
+		return d, err
+	}
+	if sc, ok := scores[r.ID]; ok {
+		d.Scores = sc
+	}
+	site, err := scanPhoto(s.DB.QueryRow(`SELECT `+photoCols+` FROM photos p WHERE p.restaurant_id = ? AND p.source = 'website'`, r.ID))
+	switch {
+	case err == nil:
+		d.SitePhoto = &site
+	case err != sql.ErrNoRows:
+		return d, err
+	}
 	d.Visits, err = s.visitsFor(r.ID)
 	return d, err
 }
@@ -192,27 +315,81 @@ func (s *Store) CreateRestaurant(in RestaurantInput) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	res, err := s.DB.Exec(`INSERT INTO restaurants(slug, name, cuisine, address, city, website, price_level, michelin_stars,
-		rating_food, rating_service, rating_ambiance, rating_value, review) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-		slug, in.Name, in.Cuisine, in.Address, in.City, in.Website, in.PriceLevel, in.MichelinStars,
-		in.RatingFood, in.RatingService, in.RatingAmbiance, in.RatingValue, in.Review)
+	tx, err := s.DB.Begin()
 	if err != nil {
 		return 0, err
 	}
-	return res.LastInsertId()
+	defer tx.Rollback()
+	res, err := tx.Exec(`INSERT INTO restaurants(slug, name, cuisine, address, city, website, price_level, michelin_stars,
+		latitude, longitude, review) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+		slug, in.Name, in.Cuisine, in.Address, in.City, in.Website, in.PriceLevel, in.MichelinStars,
+		in.Latitude, in.Longitude, in.Review)
+	if err != nil {
+		return 0, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	if err := replaceScores(tx, id, in.Scores); err != nil {
+		return 0, err
+	}
+	if in.FirstVisit != nil {
+		if _, err := createVisit(tx, id, *in.FirstVisit); err != nil {
+			return 0, err
+		}
+	}
+	return id, tx.Commit()
 }
 
 func (s *Store) UpdateRestaurant(id int64, in RestaurantInput) error {
-	// The slug is kept stable after creation so shared links don't break.
-	res, err := s.DB.Exec(`UPDATE restaurants SET name=?, cuisine=?, address=?, city=?, website=?, price_level=?, michelin_stars=?,
-		rating_food=?, rating_service=?, rating_ambiance=?, rating_value=?, review=?,
-		updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id=?`,
-		in.Name, in.Cuisine, in.Address, in.City, in.Website, in.PriceLevel, in.MichelinStars,
-		in.RatingFood, in.RatingService, in.RatingAmbiance, in.RatingValue, in.Review, id)
+	tx, err := s.DB.Begin()
 	if err != nil {
 		return err
 	}
-	return affected(res)
+	defer tx.Rollback()
+	// The slug is kept stable after creation so shared links don't break.
+	res, err := tx.Exec(`UPDATE restaurants SET name=?, cuisine=?, address=?, city=?, website=?, price_level=?, michelin_stars=?,
+		latitude=?, longitude=?, review=?, updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id=?`,
+		in.Name, in.Cuisine, in.Address, in.City, in.Website, in.PriceLevel, in.MichelinStars,
+		in.Latitude, in.Longitude, in.Review, id)
+	if err != nil {
+		return err
+	}
+	if err := affected(res); err != nil {
+		return err
+	}
+	if err := replaceScores(tx, id, in.Scores); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// ErrUnknownUser is returned when a score refers to a user that does not exist.
+var ErrUnknownUser = errors.New("unknown user")
+
+// replaceScores swaps a restaurant's scores for the given set; entries with nothing filled in are dropped.
+func replaceScores(tx *sql.Tx, restaurantID int64, scores []ScoreInput) error {
+	if _, err := tx.Exec(`DELETE FROM scores WHERE restaurant_id = ?`, restaurantID); err != nil {
+		return err
+	}
+	for _, sc := range scores {
+		if sc.empty() {
+			continue
+		}
+		var n int
+		if err := tx.QueryRow(`SELECT COUNT(*) FROM users WHERE id = ?`, sc.UserID).Scan(&n); err != nil {
+			return err
+		}
+		if n == 0 {
+			return fmt.Errorf("%w %d", ErrUnknownUser, sc.UserID)
+		}
+		if _, err := tx.Exec(`INSERT INTO scores(restaurant_id, user_id, rating_food, rating_service, rating_ambiance, rating_value, would_return)
+			VALUES(?,?,?,?,?,?,?)`, restaurantID, sc.UserID, sc.RatingFood, sc.RatingService, sc.RatingAmbiance, sc.RatingValue, sc.WouldReturn); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // DeleteRestaurant removes the restaurant and returns the file keys of its photos for cleanup.
@@ -222,8 +399,7 @@ func (s *Store) DeleteRestaurant(id int64) ([]string, error) {
 		return nil, err
 	}
 	defer tx.Rollback()
-	keys, err := queryKeys(tx, `SELECT p.file_key FROM photos p JOIN dishes d ON d.id = p.dish_id
-		JOIN visits v ON v.id = d.visit_id WHERE v.restaurant_id = ?`, id)
+	keys, err := queryKeys(tx, `SELECT file_key FROM photos WHERE restaurant_id = ?`, id)
 	if err != nil {
 		return nil, err
 	}
@@ -259,15 +435,17 @@ func (s *Store) SetRanking(ids []int64) error {
 	return tx.Commit()
 }
 
-func (s *Store) SetCover(restaurantID, photoID int64) error {
-	var n int
-	err := s.DB.QueryRow(`SELECT COUNT(*) FROM photos p JOIN dishes d ON d.id = p.dish_id
-		JOIN visits v ON v.id = d.visit_id WHERE p.id = ? AND v.restaurant_id = ?`, photoID, restaurantID).Scan(&n)
-	if err != nil {
-		return err
-	}
-	if n == 0 {
-		return ErrNotFound
+// SetCover picks the restaurant's cover among its photos; nil goes back to automatic.
+func (s *Store) SetCover(restaurantID int64, photoID *int64) error {
+	if photoID != nil {
+		var n int
+		err := s.DB.QueryRow(`SELECT COUNT(*) FROM photos WHERE id = ? AND restaurant_id = ?`, *photoID, restaurantID).Scan(&n)
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return ErrNotFound
+		}
 	}
 	res, err := s.DB.Exec(`UPDATE restaurants SET cover_photo_id = ? WHERE id = ?`, photoID, restaurantID)
 	if err != nil {

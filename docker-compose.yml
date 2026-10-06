@@ -9,6 +9,9 @@ services:
     environment:
       # Set to "true" when served over HTTPS (e.g. behind a reverse proxy).
       RESTOS_COOKIE_SECURE: "false"
+      # Set to "true" to let anyone sign up at /admin/register. Every account is a full admin,
+      # so turn it on only while the people you want have registered.
+      RESTOS_REGISTRATION: "true"
 
 volumes:
   restos-data:

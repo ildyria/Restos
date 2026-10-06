@@ -41,12 +41,28 @@ func cleanRestaurant(in *db.RestaurantInput) error {
 	if in.MichelinStars != nil && (*in.MichelinStars < 1 || *in.MichelinStars > 3) {
 		return badRequest("michelin_stars must be between 1 and 3")
 	}
-	for name, v := range map[string]*float64{
-		"rating_food": in.RatingFood, "rating_service": in.RatingService,
-		"rating_ambiance": in.RatingAmbiance, "rating_value": in.RatingValue,
-	} {
-		if err := checkRating(name, v); err != nil {
-			return err
+	if (in.Latitude == nil) != (in.Longitude == nil) {
+		return badRequest("latitude and longitude must be set together")
+	}
+	if in.SiteImageKey != nil && *in.SiteImageKey != "" && !mediaKey.MatchString(*in.SiteImageKey) {
+		return badRequest("invalid site_image_key")
+	}
+	if in.Latitude != nil && (*in.Latitude < -90 || *in.Latitude > 90 || *in.Longitude < -180 || *in.Longitude > 180) {
+		return badRequest("latitude must be within ±90 and longitude within ±180")
+	}
+	seen := map[int64]bool{}
+	for _, sc := range in.Scores {
+		if seen[sc.UserID] {
+			return badRequest("duplicate person in scores")
+		}
+		seen[sc.UserID] = true
+		for name, v := range map[string]*float64{
+			"rating_food": sc.RatingFood, "rating_service": sc.RatingService,
+			"rating_ambiance": sc.RatingAmbiance, "rating_value": sc.RatingValue,
+		} {
+			if err := checkRating(name, v); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

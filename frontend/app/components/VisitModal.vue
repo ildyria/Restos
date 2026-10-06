@@ -6,15 +6,14 @@ const props = defineProps<{ restaurantId: number, visit: Visit | null }>()
 const emit = defineEmits<{ saved: [detail: RestaurantDetail] }>()
 
 const toast = useToast()
-const today = () => new Date().toLocaleDateString('en-CA') // YYYY-MM-DD in local time
-const state = reactive({ visited_on: today(), meal: 'dinner' as 'lunch' | 'dinner', notes: '' })
+const state = reactive({ visited_on: todayISO(), meal: mealNow(), notes: '' })
 const saving = ref(false)
 
 watch(open, (isOpen) => {
   if (!isOpen) return
   Object.assign(state, props.visit
     ? { visited_on: props.visit.visited_on, meal: props.visit.meal, notes: props.visit.notes }
-    : { visited_on: today(), meal: 'dinner', notes: '' })
+    : { visited_on: todayISO(), meal: mealNow(), notes: '' })
 })
 
 const meals = [{ label: 'Lunch', value: 'lunch' }, { label: 'Dinner', value: 'dinner' }]
@@ -42,7 +41,7 @@ async function submit() {
       <UForm :state="state" class="space-y-4" @submit="submit">
         <div class="grid grid-cols-2 gap-4">
           <UFormField label="Date" name="visited_on" required>
-            <UInput v-model="state.visited_on" type="date" required class="w-full" />
+            <DateInput v-model="state.visited_on" />
           </UFormField>
           <UFormField label="Meal" name="meal">
             <USelect v-model="state.meal" :items="meals" class="w-full" />

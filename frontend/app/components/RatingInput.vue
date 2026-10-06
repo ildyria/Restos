@@ -40,7 +40,7 @@ function onKey(e: KeyboardEvent) {
       @mouseleave="hover = null"
     >
       <span v-for="i in 5" :key="i" class="relative inline-flex size-7 cursor-pointer">
-        <svg class="text-stone-300 dark:text-stone-700" width="28" height="28" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path :d="path" /></svg>
+        <svg class="text-neutral-300 dark:text-neutral-700" width="28" height="28" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path :d="path" /></svg>
         <span class="pointer-events-none absolute inset-y-0 left-0 overflow-hidden text-primary" :style="{ width: `${fillFor(i)}%` }">
           <svg class="max-w-none" width="28" height="28" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path :d="path" /></svg>
         </span>

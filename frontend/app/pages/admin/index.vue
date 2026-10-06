@@ -3,7 +3,7 @@ import type { TableColumn } from '@nuxt/ui'
 import type { RestaurantSummary } from '~~/shared/types'
 
 definePageMeta({ layout: 'admin', middleware: 'admin' })
-useSeoMeta({ title: 'Restaurants — Restos admin', robots: 'noindex' })
+useSeoMeta({ title: `Restaurants — ${SITE_NAME} admin`, robots: 'noindex' })
 
 const toast = useToast()
 const search = ref('')
