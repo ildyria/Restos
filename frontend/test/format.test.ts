@@ -4,7 +4,7 @@ import type { Score } from '~~/shared/types'
 
 const score = (name: string, would_return: boolean | null): Score => ({
   user_id: name.length, name, would_return,
-  rating_food: null, rating_service: null, rating_ambiance: null, rating_value: null, overall: null
+  rating_food: null, rating_service: null, rating_ambiance: null, rating_value: null, rating_quiet: null, overall: null
 })
 
 describe('returnVerdict', () => {

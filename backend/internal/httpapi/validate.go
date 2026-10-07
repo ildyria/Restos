@@ -58,7 +58,7 @@ func cleanRestaurant(in *db.RestaurantInput) error {
 		seen[sc.UserID] = true
 		for name, v := range map[string]*float64{
 			"rating_food": sc.RatingFood, "rating_service": sc.RatingService,
-			"rating_ambiance": sc.RatingAmbiance, "rating_value": sc.RatingValue,
+			"rating_ambiance": sc.RatingAmbiance, "rating_value": sc.RatingValue, "rating_quiet": sc.RatingQuiet,
 		} {
 			if err := checkRating(name, v); err != nil {
 				return err

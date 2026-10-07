@@ -22,6 +22,7 @@ type Restaurant struct {
 	RatingService  *float64 `json:"rating_service"`
 	RatingAmbiance *float64 `json:"rating_ambiance"`
 	RatingValue    *float64 `json:"rating_value"`
+	RatingQuiet    *float64 `json:"rating_quiet"`
 	Overall        *float64 `json:"overall"`
 	Latitude       *float64 `json:"latitude"`
 	Longitude      *float64 `json:"longitude"`
@@ -42,6 +43,7 @@ type Score struct {
 	RatingService  *float64 `json:"rating_service"`
 	RatingAmbiance *float64 `json:"rating_ambiance"`
 	RatingValue    *float64 `json:"rating_value"`
+	RatingQuiet    *float64 `json:"rating_quiet"`
 	Overall        *float64 `json:"overall"`
 	WouldReturn    *bool    `json:"would_return"`
 }
@@ -53,11 +55,12 @@ type ScoreInput struct {
 	RatingService  *float64 `json:"rating_service"`
 	RatingAmbiance *float64 `json:"rating_ambiance"`
 	RatingValue    *float64 `json:"rating_value"`
+	RatingQuiet    *float64 `json:"rating_quiet"`
 	WouldReturn    *bool    `json:"would_return"`
 }
 
 func (in ScoreInput) empty() bool {
-	return in.RatingFood == nil && in.RatingService == nil && in.RatingAmbiance == nil && in.RatingValue == nil && in.WouldReturn == nil
+	return in.RatingFood == nil && in.RatingService == nil && in.RatingAmbiance == nil && in.RatingValue == nil && in.RatingQuiet == nil && in.WouldReturn == nil
 }
 
 // Person is a user who has scored at least one restaurant (public: id and name only).
@@ -113,6 +116,7 @@ const restaurantCols = `r.id, r.slug, r.name, r.cuisine, r.address, r.city, r.we
 	(SELECT AVG(rating_service) FROM scores WHERE restaurant_id = r.id) AS avg_service,
 	(SELECT AVG(rating_ambiance) FROM scores WHERE restaurant_id = r.id) AS avg_ambiance,
 	(SELECT AVG(rating_value) FROM scores WHERE restaurant_id = r.id) AS avg_value,
+	(SELECT AVG(rating_quiet) FROM scores WHERE restaurant_id = r.id) AS avg_quiet,
 	r.latitude, r.longitude, r.review, r.rank_position, r.cover_photo_id, r.created_at, r.updated_at`
 
 // coverKeySQL resolves the cover: the chosen photo, else the website picture, else the first
@@ -128,12 +132,12 @@ type scanner interface{ Scan(dest ...any) error }
 func scanRestaurant(sc scanner, extra ...any) (Restaurant, error) {
 	var r Restaurant
 	dest := []any{&r.ID, &r.Slug, &r.Name, &r.Cuisine, &r.Address, &r.City, &r.Website, &r.PriceLevel, &r.MichelinStars,
-		&r.RatingFood, &r.RatingService, &r.RatingAmbiance, &r.RatingValue,
+		&r.RatingFood, &r.RatingService, &r.RatingAmbiance, &r.RatingValue, &r.RatingQuiet,
 		&r.Latitude, &r.Longitude, &r.Review, &r.RankPosition, &r.CoverPhotoID, &r.CreatedAt, &r.UpdatedAt}
 	if err := sc.Scan(append(dest, extra...)...); err != nil {
 		return r, err
 	}
-	r.Overall = overall(r.RatingFood, r.RatingService, r.RatingAmbiance, r.RatingValue)
+	r.Overall = overall(r.RatingFood, r.RatingService, r.RatingAmbiance, r.RatingValue, r.RatingQuiet)
 	r.Scores = []Score{}
 	return r, nil
 }
@@ -169,8 +173,8 @@ func (s *Store) ListRestaurants(f ListFilter) ([]RestaurantSummary, error) {
 		q += ` AND r.cuisine = ?`
 		args = append(args, f.Cuisine)
 	}
-	const overallSQL = `((COALESCE(avg_food,0)+COALESCE(avg_service,0)+COALESCE(avg_ambiance,0)+COALESCE(avg_value,0)) /
-		NULLIF((avg_food IS NOT NULL)+(avg_service IS NOT NULL)+(avg_ambiance IS NOT NULL)+(avg_value IS NOT NULL),0))`
+	const overallSQL = `((COALESCE(avg_food,0)+COALESCE(avg_service,0)+COALESCE(avg_ambiance,0)+COALESCE(avg_value,0)+COALESCE(avg_quiet,0)) /
+		NULLIF((avg_food IS NOT NULL)+(avg_service IS NOT NULL)+(avg_ambiance IS NOT NULL)+(avg_value IS NOT NULL)+(avg_quiet IS NOT NULL),0))`
 	switch f.Sort {
 	case "rating":
 		q += ` ORDER BY ` + overallSQL + ` IS NULL, ` + overallSQL + ` DESC, r.name`
@@ -216,7 +220,7 @@ func (s *Store) ListRestaurants(f ListFilter) ([]RestaurantSummary, error) {
 // scoresWhere loads per-person scores matching a condition on s (scores) and u (users), keyed by restaurant.
 func (s *Store) scoresWhere(where string, args ...any) (map[int64][]Score, error) {
 	rows, err := s.DB.Query(`SELECT s.restaurant_id, s.user_id, u.name, s.rating_food, s.rating_service, s.rating_ambiance,
-		s.rating_value, s.would_return FROM scores s JOIN users u ON u.id = s.user_id WHERE `+where+` ORDER BY u.id`, args...)
+		s.rating_value, s.rating_quiet, s.would_return FROM scores s JOIN users u ON u.id = s.user_id WHERE `+where+` ORDER BY u.id`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -226,10 +230,10 @@ func (s *Store) scoresWhere(where string, args ...any) (map[int64][]Score, error
 		var rid int64
 		var sc Score
 		if err := rows.Scan(&rid, &sc.UserID, &sc.Name, &sc.RatingFood, &sc.RatingService, &sc.RatingAmbiance,
-			&sc.RatingValue, &sc.WouldReturn); err != nil {
+			&sc.RatingValue, &sc.RatingQuiet, &sc.WouldReturn); err != nil {
 			return nil, err
 		}
-		sc.Overall = overall(sc.RatingFood, sc.RatingService, sc.RatingAmbiance, sc.RatingValue)
+		sc.Overall = overall(sc.RatingFood, sc.RatingService, sc.RatingAmbiance, sc.RatingValue, sc.RatingQuiet)
 		out[rid] = append(out[rid], sc)
 	}
 	return out, rows.Err()
@@ -384,8 +388,8 @@ func replaceScores(tx *sql.Tx, restaurantID int64, scores []ScoreInput) error {
 		if n == 0 {
 			return fmt.Errorf("%w %d", ErrUnknownUser, sc.UserID)
 		}
-		if _, err := tx.Exec(`INSERT INTO scores(restaurant_id, user_id, rating_food, rating_service, rating_ambiance, rating_value, would_return)
-			VALUES(?,?,?,?,?,?,?)`, restaurantID, sc.UserID, sc.RatingFood, sc.RatingService, sc.RatingAmbiance, sc.RatingValue, sc.WouldReturn); err != nil {
+		if _, err := tx.Exec(`INSERT INTO scores(restaurant_id, user_id, rating_food, rating_service, rating_ambiance, rating_value, rating_quiet, would_return)
+			VALUES(?,?,?,?,?,?,?,?)`, restaurantID, sc.UserID, sc.RatingFood, sc.RatingService, sc.RatingAmbiance, sc.RatingValue, sc.RatingQuiet, sc.WouldReturn); err != nil {
 			return err
 		}
 	}

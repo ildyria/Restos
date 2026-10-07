@@ -51,6 +51,7 @@ export interface Score {
   rating_service: number | null
   rating_ambiance: number | null
   rating_value: number | null
+  rating_quiet: number | null
   overall: number | null
   would_return: boolean | null
 }
@@ -76,6 +77,7 @@ export interface Restaurant {
   rating_service: number | null
   rating_ambiance: number | null
   rating_value: number | null
+  rating_quiet: number | null
   overall: number | null
   latitude: number | null
   longitude: number | null
@@ -142,7 +144,9 @@ export const RATING_CRITERIA = [
   { key: 'rating_food', label: 'Food' },
   { key: 'rating_service', label: 'Service' },
   { key: 'rating_ambiance', label: 'Ambiance' },
-  { key: 'rating_value', label: 'Value' }
+  { key: 'rating_value', label: 'Value' },
+  /** Higher is quieter: 5 means you can talk easily. */
+  { key: 'rating_quiet', label: 'Quiet' }
 ] as const
 
 /** The public About page: Markdown already rendered (and sanitised) by the server. */

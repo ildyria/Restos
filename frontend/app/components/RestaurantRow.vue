@@ -31,9 +31,9 @@ const visits = computed(() => `${r.value.visit_count} ${r.value.visit_count === 
     @mouseenter="$emit('hover', true)"
     @mouseleave="$emit('hover', false)"
   >
-    <!-- Desktop / tablet -->
+    <!-- Desktop / landscape tablet -->
     <div
-      class="hidden cursor-pointer grid-cols-[2.75rem_6rem_minmax(0,1fr)_16.5rem_3.5rem] items-center gap-5 px-3 py-[18px] sm:grid"
+      class="hidden cursor-pointer grid-cols-[2.75rem_6rem_minmax(0,1fr)_20.5rem_3.5rem] items-center gap-5 px-3 py-[18px] md:grid"
       role="button"
       tabindex="0"
       :aria-expanded="open"
@@ -58,7 +58,7 @@ const visits = computed(() => `${r.value.visit_count} ${r.value.visit_count === 
         </span>
       </div>
 
-      <div class="grid grid-cols-4 gap-2">
+      <div class="grid grid-cols-5 gap-2">
         <div v-for="c in cats" :key="c.key">
           <div class="lining text-base">{{ c.text }}</div>
           <div class="mt-[5px] h-[3px] overflow-hidden rounded-sm bg-accented/60">
@@ -70,7 +70,7 @@ const visits = computed(() => `${r.value.visit_count} ${r.value.visit_count === 
       <span class="lining text-right text-2xl">{{ formatScore(r.overall) }}</span>
     </div>
 
-    <div v-if="open" class="hidden grid-cols-[2.75rem_6rem_minmax(0,1fr)_16.5rem_3.5rem] gap-5 px-3 pb-5 sm:grid">
+    <div v-if="open" class="hidden grid-cols-[2.75rem_6rem_minmax(0,1fr)_20.5rem_3.5rem] gap-5 px-3 pb-5 md:grid">
       <span /><span />
       <div class="text-sm leading-normal text-muted">
         <template v-if="r.address || r.city">{{ [r.address, r.city].filter(Boolean).join(', ') }}<br></template>
@@ -78,7 +78,7 @@ const visits = computed(() => `${r.value.visit_count} ${r.value.visit_count === 
         <NuxtLink :to="`/r/${r.slug}`" class="mt-2 block text-primary hover:underline">View visits &amp; dishes →</NuxtLink>
       </div>
       <div class="flex flex-col gap-2">
-        <div v-for="p in r.scores" :key="p.user_id" class="lining grid grid-cols-4 gap-2 text-sm text-toned">
+        <div v-for="p in r.scores" :key="p.user_id" class="lining grid grid-cols-5 gap-2 text-sm text-toned">
           <span v-for="c in RATING_CRITERIA" :key="c.key">{{ formatScore(p[c.key]) }}</span>
         </div>
       </div>
@@ -87,9 +87,9 @@ const visits = computed(() => `${r.value.visit_count} ${r.value.visit_count === 
       </div>
     </div>
 
-    <!-- Mobile -->
+    <!-- Mobile / portrait tablet -->
     <div
-      class="cursor-pointer py-[18px] sm:hidden"
+      class="cursor-pointer py-[18px] md:hidden"
       role="button"
       tabindex="0"
       :aria-expanded="open"
@@ -108,7 +108,7 @@ const visits = computed(() => `${r.value.visit_count} ${r.value.visit_count === 
         <img v-if="r.cover_key" :src="mediaUrl(r.cover_key)" :alt="r.name" class="size-full object-cover" loading="lazy">
         <div v-else class="grid size-full place-items-center text-dimmed"><UIcon name="i-lucide-utensils-crossed" class="size-6" /></div>
       </div>
-      <div class="ml-10 mt-3 grid grid-cols-4 gap-2">
+      <div class="ml-10 mt-3 grid grid-cols-5 gap-2">
         <div v-for="c in cats" :key="c.key">
           <div class="text-xs text-dimmed">{{ c.label }}</div>
           <div class="lining text-base">{{ c.text }}</div>
@@ -119,7 +119,7 @@ const visits = computed(() => `${r.value.visit_count} ${r.value.visit_count === 
         <span class="size-1.5 rounded-full" :class="verdictClass[1]" />{{ verdict.label }}
       </span>
       <div v-if="open" class="ml-10 mt-3.5 flex flex-col gap-2 rounded-lg border border-default bg-default p-3 text-sm" @click.stop>
-        <div v-for="p in r.scores" :key="p.user_id" class="lining grid grid-cols-[3rem_repeat(4,1fr)] gap-2 text-toned">
+        <div v-for="p in r.scores" :key="p.user_id" class="lining grid grid-cols-[3rem_repeat(5,1fr)] gap-2 text-toned">
           <span class="truncate text-muted">{{ p.name }}</span>
           <span v-for="c in RATING_CRITERIA" :key="c.key">{{ formatScore(p[c.key]) }}</span>
         </div>

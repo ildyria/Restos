@@ -22,7 +22,7 @@ const (
 // are filled in when the page is shown.
 const DefaultAbout = `We are {{names}}. This is our notebook of the {{restaurants}} we have eaten at: where we went, what we ordered, and whether we would go back.
 
-Each of us scores every place on our own, from 1 to 5 in half steps, across four things: food, service, ambiance and value. The score you see in the list is the average of those.
+Each of us scores every place on our own, from 1 to 5 in half steps, across five things: food, service, ambiance, value and how quiet the room is. The score you see in the list is the average of those.
 
 The ranking is not sorted by score. It is our own order of preference, the list we would hand a friend who asked where to eat, so a place can sit above a higher-scoring one.
 `

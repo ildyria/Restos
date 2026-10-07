@@ -4,7 +4,7 @@ A small site for the restaurants we've eaten at: rate them, write a review, add 
 
 - **Backend:** Go (stdlib `net/http`), SQLite (pure Go, no CGO), photos on local disk
 - **Frontend:** Nuxt 4 + Nuxt UI, built as a static SPA and embedded in the Go binary
-- **Ratings:** each person (admin user) scores food, service, ambiance and value (1–5 in half steps) and says whether they'd go back; the public scores are the averages across people, and the overall score is the average of the four
+- **Ratings:** each person (admin user) scores food, service, ambiance, value and quietness (1–5 in half steps) and says whether they'd go back; the public scores are the averages across people, and the overall score is the average of the five
 - **Photos:** uploaded to a visit, then captioned with the dish they show (typing a dish name links or creates it); a restaurant's website picture (`og:image`) is fetched as soon as its address is entered and can be chosen as the cover
 - **Map:** restaurants can be placed on a map (OpenStreetMap tiles; the admin "Find address" button geocodes through OpenStreetMap Nominatim from the browser)
 - **Ranking:** manual drag-and-drop order, independent of the scores

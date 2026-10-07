@@ -31,6 +31,7 @@ function scoresFor(d: RestaurantDetail | null): ScoreInput[] {
       rating_service: s?.rating_service ?? null,
       rating_ambiance: s?.rating_ambiance ?? null,
       rating_value: s?.rating_value ?? null,
+      rating_quiet: s?.rating_quiet ?? null,
       would_return: s?.would_return ?? null
     }
   })

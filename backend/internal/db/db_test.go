@@ -233,6 +233,20 @@ func TestPerPersonScores(t *testing.T) {
 	if d, _ := s.RestaurantByID(id); len(d.Scores) != 1 || *d.RatingFood != 3 || d.Latitude != nil {
 		t.Fatalf("after update = %+v", d.Restaurant)
 	}
+	// Quietness counts like any other criterion, and a quiet-only score is kept.
+	if err := s.UpdateRestaurant(id, RestaurantInput{Name: "Duo", Scores: []ScoreInput{
+		{UserID: sam, RatingQuiet: f(2)},
+		{UserID: lea, RatingFood: f(3), RatingQuiet: f(5)},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	d, _ = s.RestaurantByID(id)
+	if len(d.Scores) != 2 || *d.RatingQuiet != 3.5 || *d.Overall != 3.25 || *d.Scores[0].Overall != 2 || *d.Scores[1].Overall != 4 {
+		t.Fatalf("with quiet = %+v", d.Restaurant)
+	}
+	if l, _ := s.ListRestaurants(ListFilter{Sort: "rating"}); len(l) != 1 || *l[0].RatingQuiet != 3.5 {
+		t.Fatalf("list with quiet = %+v", l)
+	}
 }
 
 func TestPhotoCaptions(t *testing.T) {
