@@ -361,6 +361,48 @@ func (s *Server) storeUploads(w http.ResponseWriter, r *http.Request, visitID in
 	return s.respondRestaurant(w, http.StatusCreated, rid)
 }
 
+// uploadRestaurantPhoto sets the restaurant's own photo (one image in the 'file' field), which
+// replaces the previous one and becomes the cover. It is removed like any photo.
+func (s *Server) uploadRestaurantPhoto(w http.ResponseWriter, r *http.Request) error {
+	id, err := pathID(r, "id")
+	if err != nil {
+		return err
+	}
+	sv, err := s.receivePhoto(w, r)
+	if err != nil {
+		return err
+	}
+	old, err := s.Store.SetRestaurantPhoto(id, sv.Key, sv.Width, sv.Height)
+	if err != nil {
+		s.Media.Remove([]string{sv.Key})
+		return err
+	}
+	s.Media.Remove(old)
+	return s.respondRestaurant(w, http.StatusOK, id)
+}
+
+// receivePhoto stores the single image uploaded in the 'file' field.
+func (s *Server) receivePhoto(w http.ResponseWriter, r *http.Request) (media.Saved, error) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxPhotoBytes+1<<20)
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		return media.Saved{}, badRequest("invalid or too large upload (20 MB at most)")
+	}
+	defer r.MultipartForm.RemoveAll()
+	f, fh, err := r.FormFile("file")
+	if err != nil {
+		return media.Saved{}, badRequest("no file provided (use the 'file' field)")
+	}
+	sv, err := s.Media.Save(f)
+	f.Close()
+	if err == media.ErrUnsupported {
+		return media.Saved{}, apiError{http.StatusUnsupportedMediaType, fh.Filename + ": " + err.Error()}
+	}
+	if err != nil {
+		return media.Saved{}, badRequest(fh.Filename + " could not be read as an image")
+	}
+	return sv, nil
+}
+
 func keysOf(sv []media.Saved) []string {
 	keys := make([]string, len(sv))
 	for i, s := range sv {

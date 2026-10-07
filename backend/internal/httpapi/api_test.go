@@ -379,6 +379,79 @@ func TestFirstVisitOverride(t *testing.T) {
 	}
 }
 
+func TestRestaurantPhoto(t *testing.T) {
+	e := newEnv(t)
+	e.login()
+	var rest db.RestaurantDetail
+	rec := e.do("POST", "/api/admin/restaurants", map[string]any{"name": "Chez Photo"}, true)
+	json.Unmarshal(rec.Body.Bytes(), &rest)
+	base := "/api/admin/restaurants/" + itoa(rest.ID)
+	decode := func(rec *httptest.ResponseRecorder) db.RestaurantDetail {
+		var d db.RestaurantDetail
+		json.Unmarshal(rec.Body.Bytes(), &d)
+		return d
+	}
+	exists := func(key string) bool {
+		_, err := os.Stat(filepath.Join(e.media, "full", key+".jpg"))
+		return err == nil
+	}
+	upload := func(path string) *httptest.ResponseRecorder {
+		var buf bytes.Buffer
+		mw := multipart.NewWriter(&buf)
+		fw, _ := mw.CreateFormFile("file", "front.jpg")
+		fw.Write(jpegBytes(40, 30))
+		mw.Close()
+		return e.doReader("POST", path, bytes.NewReader(buf.Bytes()), mw.FormDataContentType(), true)
+	}
+
+	// A visit photo chosen as cover first.
+	rd, ct := multipartBody(t, map[string][]byte{"dish.jpg": jpegBytes(40, 30)})
+	rest = decode(e.doReader("POST", "/api/admin/visits/"+itoa(rest.Visits[0].ID)+"/photos", rd, ct, true))
+	dish := rest.Visits[0].Photos[0]
+	e.do("PUT", base+"/cover", map[string]any{"photo_id": dish.ID}, true)
+
+	// The restaurant photo sits outside the visits and takes over the cover.
+	rec = upload(base + "/photo")
+	if rec.Code != 200 {
+		t.Fatalf("upload = %d %s", rec.Code, rec.Body)
+	}
+	rest = decode(rec)
+	first := rest.RestaurantPhoto
+	if first == nil || first.Source != "restaurant" || first.VisitID != nil || !exists(first.Key) {
+		t.Fatalf("restaurant photo = %+v", first)
+	}
+	if rest.CoverPhotoID == nil || *rest.CoverPhotoID != first.ID || len(rest.Visits[0].Photos) != 1 {
+		t.Fatalf("after upload = %+v", rest)
+	}
+	if d, _ := e.get(rest.Slug); d.CoverKey == nil || *d.CoverKey != first.Key {
+		t.Fatalf("public cover = %v", d.CoverKey)
+	}
+	if rec = e.do("PUT", "/api/admin/photos/"+itoa(first.ID), map[string]string{"dish": "Soup"}, true); rec.Code != 404 {
+		t.Fatalf("caption restaurant photo = %d", rec.Code)
+	}
+
+	// A new upload replaces it, file included.
+	rest = decode(upload(base + "/photo"))
+	second := rest.RestaurantPhoto
+	if second == nil || second.Key == first.Key || exists(first.Key) || !exists(second.Key) || *rest.CoverPhotoID != second.ID {
+		t.Fatalf("replace = %+v", rest)
+	}
+
+	// Deleting it falls back to the automatic cover (the visit photo).
+	rec = e.do("DELETE", "/api/admin/photos/"+itoa(second.ID), nil, true)
+	rest = decode(rec)
+	if rec.Code != 200 || rest.RestaurantPhoto != nil || rest.CoverPhotoID != nil || exists(second.Key) {
+		t.Fatalf("delete = %d %+v", rec.Code, rest)
+	}
+	if d, _ := e.get(rest.Slug); d.CoverKey == nil || *d.CoverKey != dish.Key {
+		t.Fatalf("cover after delete = %v", d.CoverKey)
+	}
+
+	if rec = upload("/api/admin/restaurants/9999/photo"); rec.Code != 404 {
+		t.Fatalf("unknown restaurant = %d", rec.Code)
+	}
+}
+
 func (e *env) get(slug string) (db.RestaurantDetail, int) {
 	var d db.RestaurantDetail
 	rec := e.do("GET", "/api/restaurants/"+slug, nil, false)

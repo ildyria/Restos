@@ -6,7 +6,8 @@ import (
 )
 
 // Photo belongs to a restaurant, usually through a visit; DishID says which dish it shows
-// (its caption), if any. A photo with no visit is the picture taken from the website (Source "website").
+// (its caption), if any. A photo with no visit is either the restaurant's own photo (Source
+// "restaurant") or the picture taken from its website (Source "website"); neither shows a dish.
 type Photo struct {
 	ID           int64  `json:"id"`
 	RestaurantID int64  `json:"restaurant_id"`
@@ -233,7 +234,7 @@ func (s *Store) SetPhotoDish(photoID int64, name string) error {
 		return notFound(err)
 	}
 	if visitID == nil {
-		return ErrNotFound // the website picture shows no dish
+		return ErrNotFound // restaurant and website pictures show no dish
 	}
 	var newDish *int64
 	if name != "" {

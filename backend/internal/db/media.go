@@ -93,3 +93,41 @@ func (s *Store) SetSitePhoto(restaurantID int64, key string) ([]string, error) {
 	}
 	return removed, tx.Commit()
 }
+
+// SetRestaurantPhoto makes an uploaded image the restaurant's own photo, replacing any previous
+// one, and uses it as the cover. It returns the file keys that are no longer used.
+func (s *Store) SetRestaurantPhoto(restaurantID int64, key string, w, h int) ([]string, error) {
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	var n int
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM restaurants WHERE id = ?`, restaurantID).Scan(&n); err != nil {
+		return nil, err
+	}
+	if n == 0 {
+		return nil, ErrNotFound
+	}
+	removed, err := queryKeys(tx, `SELECT file_key FROM photos WHERE restaurant_id = ? AND source = 'restaurant'`, restaurantID)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := tx.Exec(`DELETE FROM photos WHERE restaurant_id = ? AND source = 'restaurant'`, restaurantID); err != nil {
+		return nil, err
+	}
+	res, err := tx.Exec(`INSERT INTO photos(restaurant_id, source, file_key, width, height) VALUES(?, 'restaurant', ?, ?, ?)`,
+		restaurantID, key, w, h)
+	if err != nil {
+		return nil, err
+	}
+	newID, err := res.LastInsertId()
+	if err != nil {
+		return nil, err
+	}
+	if _, err := tx.Exec(`UPDATE restaurants SET cover_photo_id = ? WHERE id = ?`, newID, restaurantID); err != nil {
+		return nil, err
+	}
+	return removed, tx.Commit()
+}

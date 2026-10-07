@@ -123,6 +123,7 @@ func (s *Server) adminRoutes() []route {
 		{"PUT /api/admin/restaurants/{id}", s.updateRestaurant},
 		{"DELETE /api/admin/restaurants/{id}", s.deleteRestaurant},
 		{"PUT /api/admin/restaurants/{id}/cover", s.setCover},
+		{"POST /api/admin/restaurants/{id}/photo", s.uploadRestaurantPhoto},
 		{"PUT /api/admin/ranking", s.setRanking},
 		{"POST /api/admin/restaurants/{id}/visits", s.createVisit},
 		{"PUT /api/admin/visits/{id}", s.updateVisit},

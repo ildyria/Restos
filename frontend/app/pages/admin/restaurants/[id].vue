@@ -128,13 +128,41 @@ async function readWebsite(force = false) {
   }
 }
 
-// Cover: the website picture or any visit photo; none chosen = automatic (website picture first).
+// Cover: the restaurant photo, the website picture or any visit photo; none chosen = automatic
+// (restaurant photo first, then the website picture, then the latest visit's first photo).
 const coverCandidates = computed<Photo[]>(() => {
   const d = detail.value
   if (!d) return []
   const visitPhotos = d.visits.flatMap(v => [...v.photos, ...v.dishes.flatMap(x => x.photos)])
-  return d.site_photo ? [d.site_photo, ...visitPhotos] : visitPhotos
+  return [d.restaurant_photo, d.site_photo, ...visitPhotos].filter((p): p is Photo => !!p)
 })
+const coverBadge = { restaurant: 'Restaurant', website: 'Website', upload: '' } as const
+const coverLabel = {
+  restaurant: 'Use the restaurant photo as cover',
+  website: 'Use the website picture as cover',
+  upload: 'Use this photo as cover'
+} as const
+
+// The restaurant's own photo (the place itself, not a dish): uploading one replaces the previous
+// one and makes it the cover.
+const photoInput = ref<HTMLInputElement | null>(null)
+const uploadingPhoto = ref(false)
+async function uploadRestaurantPhoto(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  uploadingPhoto.value = true
+  try {
+    const fd = new FormData()
+    fd.append('file', file)
+    detail.value = await api<RestaurantDetail>(`/api/admin/restaurants/${detail.value!.id}/photo`, { method: 'POST', body: fd })
+  } catch (err) {
+    toast.add({ title: 'Upload failed', description: errorMessage(err), color: 'error' })
+  } finally {
+    input.value = ''
+    uploadingPhoto.value = false
+  }
+}
 async function chooseCover(photoId: number | null) {
   try {
     detail.value = await api<RestaurantDetail>(`/api/admin/restaurants/${detail.value!.id}/cover`, { method: 'PUT', body: { photo_id: photoId } })
@@ -194,6 +222,8 @@ function ask(title: string, description: string, action: () => Promise<Restauran
 }
 const deleteVisit = (v: Visit) => ask('Delete this visit?', `${formatDate(v.visited_on)} and all its dishes and photos will be removed.`,
   () => api<RestaurantDetail>(`/api/admin/visits/${v.id}`, { method: 'DELETE' }))
+const deleteRestaurantPhoto = (p: Photo) => ask('Remove the restaurant photo?', 'The cover goes back to the next available picture.',
+  () => api<RestaurantDetail>(`/api/admin/photos/${p.id}`, { method: 'DELETE' }))
 const deleteDish = (id: number, name: string) => ask(`Delete "${name}"?`, 'Its photos stay on the visit, without a dish.',
   () => api<RestaurantDetail>(`/api/admin/dishes/${id}`, { method: 'DELETE' }))
 </script>
@@ -280,12 +310,29 @@ const deleteDish = (id: number, name: string) => ask(`Delete "${name}"?`, 'Its p
           </section>
         </UForm>
 
-        <section v-if="detail && coverCandidates.length">
+        <section v-if="detail">
           <div class="mb-3 flex items-baseline justify-between">
             <h2 class="font-display text-xl">Cover</h2>
             <p class="text-sm text-muted">Shown in the list and at the top of the restaurant page.</p>
           </div>
-          <ul class="grid grid-cols-3 gap-3 sm:grid-cols-5">
+          <div class="mb-4 flex items-center gap-4">
+            <div class="grid aspect-[4/3] w-28 shrink-0 place-items-center overflow-hidden rounded-md bg-elevated text-dimmed">
+              <img v-if="detail.restaurant_photo" :src="mediaUrl(detail.restaurant_photo.key)" alt="Photo of the restaurant" class="size-full object-cover">
+              <UIcon v-else name="i-lucide-store" class="size-5" />
+            </div>
+            <div class="space-y-2 text-sm">
+              <p class="font-medium">Photo of the restaurant</p>
+              <p class="text-muted">The place itself rather than a dish. Uploading one makes it the cover.</p>
+              <div class="flex gap-2">
+                <input ref="photoInput" type="file" accept="image/jpeg,image/png,image/webp" class="hidden" @change="uploadRestaurantPhoto">
+                <UButton size="xs" color="neutral" variant="subtle" icon="i-lucide-upload" :loading="uploadingPhoto" @click="photoInput?.click()">
+                  {{ detail.restaurant_photo ? 'Replace' : 'Upload photo' }}
+                </UButton>
+                <UButton v-if="detail.restaurant_photo" size="xs" color="neutral" variant="ghost" icon="i-lucide-x" @click="deleteRestaurantPhoto(detail.restaurant_photo)">Remove</UButton>
+              </div>
+            </div>
+          </div>
+          <ul v-if="coverCandidates.length" class="grid grid-cols-3 gap-3 sm:grid-cols-5">
             <li>
               <button
                 type="button"
@@ -303,12 +350,12 @@ const deleteDish = (id: number, name: string) => ask(`Delete "${name}"?`, 'Its p
                 class="block aspect-[4/3] w-full overflow-hidden rounded-md border"
                 :class="detail.cover_photo_id === p.id ? 'border-primary ring-2 ring-primary' : 'border-default hover:border-accented'"
                 :aria-pressed="detail.cover_photo_id === p.id"
-                :aria-label="p.source === 'website' ? 'Use the website picture as cover' : 'Use this photo as cover'"
+                :aria-label="coverLabel[p.source]"
                 @click="chooseCover(p.id)"
               >
                 <img :src="mediaUrl(p.key)" alt="" class="size-full object-cover">
               </button>
-              <span v-if="p.source === 'website'" class="pointer-events-none absolute bottom-1 left-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white">Website</span>
+              <span v-if="coverBadge[p.source]" class="pointer-events-none absolute bottom-1 left-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white">{{ coverBadge[p.source] }}</span>
             </li>
           </ul>
           <p v-if="siteKey" class="mt-2 text-xs text-muted">Save to use the newly fetched website picture.</p>

@@ -8,8 +8,6 @@ import (
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
-
-	"restos/internal/media"
 )
 
 const (
@@ -188,22 +186,9 @@ func (s *Server) previewAbout(w http.ResponseWriter, r *http.Request) error {
 
 // uploadAboutPhoto replaces the About page photo with the image in the "file" field.
 func (s *Server) uploadAboutPhoto(w http.ResponseWriter, r *http.Request) error {
-	r.Body = http.MaxBytesReader(w, r.Body, maxPhotoBytes+1<<20)
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		return badRequest("invalid or too large upload (20 MB at most)")
-	}
-	defer r.MultipartForm.RemoveAll()
-	f, fh, err := r.FormFile("file")
+	sv, err := s.receivePhoto(w, r)
 	if err != nil {
-		return badRequest("no file provided (use the 'file' field)")
-	}
-	sv, err := s.Media.Save(f)
-	f.Close()
-	if err == media.ErrUnsupported {
-		return apiError{http.StatusUnsupportedMediaType, fh.Filename + ": " + err.Error()}
-	}
-	if err != nil {
-		return badRequest(fh.Filename + " could not be read as an image")
+		return err
 	}
 	return s.replaceAboutPhoto(w, sv.Key)
 }

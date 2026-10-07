@@ -3,14 +3,15 @@ export type Course = 'starter' | 'main' | 'dessert' | 'drink' | 'other'
 
 /**
  * A photo belongs to a restaurant, usually through a visit; dish_id is what it shows (its caption).
- * The picture taken from the website has no visit and source 'website'.
+ * Two kinds have no visit and show no dish: the restaurant's own uploaded photo (source
+ * 'restaurant') and the picture taken from its website (source 'website').
  */
 export interface Photo {
   id: number
   restaurant_id: number
   visit_id: number | null
   dish_id: number | null
-  source: 'upload' | 'website'
+  source: 'upload' | 'website' | 'restaurant'
   key: string
   width: number
   height: number
@@ -98,6 +99,8 @@ export interface RestaurantSummary extends Restaurant {
 
 export interface RestaurantDetail extends Restaurant {
   cover_key: string | null
+  /** The restaurant's own photo (not of a dish), if any. */
+  restaurant_photo: Photo | null
   /** Picture taken from the website (og:image), if any. */
   site_photo: Photo | null
   visits: Visit[]

@@ -99,6 +99,8 @@ type RestaurantSummary struct {
 type RestaurantDetail struct {
 	Restaurant
 	CoverKey *string `json:"cover_key"`
+	// RestaurantPhoto is the restaurant's own uploaded photo (not of a dish), if any.
+	RestaurantPhoto *Photo `json:"restaurant_photo"`
 	// SitePhoto is the picture taken from the restaurant's website, if any.
 	SitePhoto *Photo  `json:"site_photo"`
 	Visits    []Visit `json:"visits"`
@@ -119,10 +121,11 @@ const restaurantCols = `r.id, r.slug, r.name, r.cuisine, r.address, r.city, r.we
 	(SELECT AVG(rating_quiet) FROM scores WHERE restaurant_id = r.id) AS avg_quiet,
 	r.latitude, r.longitude, r.review, r.rank_position, r.cover_photo_id, r.created_at, r.updated_at`
 
-// coverKeySQL resolves the cover: the chosen photo, else the website picture, else the first
-// photo of the latest visit.
+// coverKeySQL resolves the cover: the chosen photo, else the restaurant's own photo, else the
+// website picture, else the first photo of the latest visit.
 const coverKeySQL = `COALESCE(
 	(SELECT file_key FROM photos WHERE id = r.cover_photo_id),
+	(SELECT file_key FROM photos WHERE restaurant_id = r.id AND source = 'restaurant'),
 	(SELECT file_key FROM photos WHERE restaurant_id = r.id AND source = 'website'),
 	(SELECT p.file_key FROM photos p JOIN visits v ON v.id = p.visit_id
 	 WHERE v.restaurant_id = r.id ORDER BY v.visited_on DESC, p.position, p.id LIMIT 1))`
@@ -140,6 +143,19 @@ func scanRestaurant(sc scanner, extra ...any) (Restaurant, error) {
 	r.Overall = overall(r.RatingFood, r.RatingService, r.RatingAmbiance, r.RatingValue, r.RatingQuiet)
 	r.Scores = []Score{}
 	return r, nil
+}
+
+// photoBySource returns a restaurant's photo that is attached to no visit ("restaurant" or
+// "website"; at most one of each), or nil.
+func (s *Store) photoBySource(restaurantID int64, source string) (*Photo, error) {
+	p, err := scanPhoto(s.DB.QueryRow(`SELECT `+photoCols+` FROM photos p WHERE p.restaurant_id = ? AND p.source = ?`, restaurantID, source))
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
 }
 
 func overall(vals ...*float64) *float64 {
@@ -303,11 +319,10 @@ func (s *Store) restaurantDetail(where string, arg any) (RestaurantDetail, error
 	if sc, ok := scores[r.ID]; ok {
 		d.Scores = sc
 	}
-	site, err := scanPhoto(s.DB.QueryRow(`SELECT `+photoCols+` FROM photos p WHERE p.restaurant_id = ? AND p.source = 'website'`, r.ID))
-	switch {
-	case err == nil:
-		d.SitePhoto = &site
-	case err != sql.ErrNoRows:
+	if d.RestaurantPhoto, err = s.photoBySource(r.ID, "restaurant"); err != nil {
+		return d, err
+	}
+	if d.SitePhoto, err = s.photoBySource(r.ID, "website"); err != nil {
 		return d, err
 	}
 	d.Visits, err = s.visitsFor(r.ID)
