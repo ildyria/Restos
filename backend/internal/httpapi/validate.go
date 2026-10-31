@@ -13,8 +13,8 @@ func checkRating(name string, v *float64) error {
 	if v == nil {
 		return nil
 	}
-	if *v < 1 || *v > 5 || math.Mod(*v*2, 1) != 0 {
-		return badRequest(name + " must be between 1 and 5 in steps of 0.5")
+	if *v < 0 || *v > 5 || math.Mod(*v*2, 1) != 0 {
+		return badRequest(name + " must be between 0 and 5 in steps of 0.5")
 	}
 	return nil
 }
