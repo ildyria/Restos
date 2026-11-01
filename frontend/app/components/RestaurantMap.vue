@@ -23,12 +23,14 @@ let focusTimer: ReturnType<typeof setTimeout> | undefined
 const FOCUS_ZOOM = 15
 
 // The view to return to once nothing is focused: whatever the visitor was looking at (their own
-// zoom included) before the map flew to a hovered restaurant.
+// zoom included) before the map flew to a hovered restaurant. 'overview' is the fitted view of
+// every pin, worked out again for the map's size when it's used (the map may have been resized).
 interface View { center: L.LatLng, zoom: number }
-let home: View | null = null
+type Home = View | 'overview'
+let home: Home | null = null
 // Set while flying back home, so a restaurant hovered mid-flight still returns to the same view
 // rather than to wherever the flight happened to be.
-let returningTo: View | null = null
+let returningTo: Home | null = null
 
 function pinIcon(p: MapPin, on: boolean) {
   const size = on ? 30 : 24
@@ -58,10 +60,38 @@ function drawPins() {
 
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
+const pinBounds = () => L.latLngBounds(props.pins.map(p => [p.lat, p.lng] as L.LatLngTuple))
+
 function showAll() {
   if (!map || !props.pins.length) return
-  map.fitBounds(L.latLngBounds(props.pins.map(p => [p.lat, p.lng] as L.LatLngTuple)), { padding: [40, 40], maxZoom: FOCUS_ZOOM })
+  map.fitBounds(pinBounds(), { padding: [40, 40], maxZoom: FOCUS_ZOOM, animate: false })
 }
+
+// The view showAll() gives at the map's current size (the same maths as Leaflet's fitBounds).
+function overviewView(): View | null {
+  if (!map || !props.pins.length) return null
+  const b = pinBounds()
+  const zoom = Math.min(FOCUS_ZOOM, map.getBoundsZoom(b, false, L.point(80, 80)))
+  const center = map.unproject(map.project(b.getSouthWest(), zoom).add(map.project(b.getNorthEast(), zoom)).divideBy(2), zoom)
+  return { center, zoom }
+}
+
+// Whether the map still shows that overview, i.e. the visitor hasn't zoomed or moved it.
+function onOverview() {
+  const o = overviewView()
+  if (!map || !o || map.getZoom() !== o.zoom) return false
+  return map.project(map.getCenter()).distanceTo(map.project(o.center)) < 2
+}
+
+// After a size change: an untouched overview is fitted again to the new size; a view the visitor
+// chose themselves is kept.
+function refresh() {
+  if (!map) return
+  const fit = onOverview()
+  map.invalidateSize()
+  if (fit) showAll()
+}
+defineExpose({ refresh })
 
 function moveTo(center: L.LatLngExpression, zoom: number) {
   if (!map) return
@@ -71,16 +101,17 @@ function moveTo(center: L.LatLngExpression, zoom: number) {
 
 function zoomTo(p: MapPin) {
   if (!map) return
-  home ??= returningTo ?? { center: map.getCenter(), zoom: map.getZoom() }
+  home ??= returningTo ?? (onOverview() ? 'overview' : { center: map.getCenter(), zoom: map.getZoom() })
   moveTo([p.lat, p.lng], Math.max(map.getZoom(), FOCUS_ZOOM))
 }
 
 function goHome() {
   if (!map || !home) return
-  const view = home
+  const back = home
+  const view = back === 'overview' ? overviewView() : back
   home = null
-  moveTo(view.center, view.zoom)
-  returningTo = view
+  if (view) moveTo(view.center, view.zoom)
+  returningTo = back
 }
 
 onMounted(() => {
@@ -91,7 +122,7 @@ onMounted(() => {
   map.on('click', () => emit('mapClick'))
   drawPins()
   // The map can be mounted while its box is still settling (sticky column, tab switch).
-  resize = new ResizeObserver(() => map?.invalidateSize())
+  resize = new ResizeObserver(refresh)
   resize.observe(el.value!)
 })
 

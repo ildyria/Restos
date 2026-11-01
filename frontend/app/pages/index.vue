@@ -54,29 +54,47 @@ onBeforeUnmount(() => clearTimeout(pinTimer))
 const expanded = ref(false)
 const preview = computed(() => expanded.value ? (list.value ?? []).find(r => r.id === hovered.value) : undefined)
 let listScroll = 0
+const sideMap = useTemplateRef<{ refresh: () => void }>('sideMap')
+
+// Switching between the side map and the wide one: the map grows or shrinks into place while the
+// list fades (a view transition, see main.css). The layout change, the map's re-fit to its new
+// size and any scrolling all happen inside the update, so the transition ends on the final view.
+// Browsers without view transitions, and visitors who prefer less motion, get the switch at once.
+async function switchMap(widen: boolean, after: () => void) {
+  const update = async () => {
+    expanded.value = widen
+    await nextTick()
+    sideMap.value?.refresh()
+    after()
+  }
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  if (reduced || !document.startViewTransition) return update()
+  await document.startViewTransition(update).updateCallbackDone
+}
+
 async function expandMap() {
   if (!wide.value || expanded.value) return
   listScroll = window.scrollY
-  expanded.value = true
   hovered.value = focused.value = null
-  await nextTick()
-  window.scrollTo({ top: 0 })
+  await switchMap(true, () => window.scrollTo({ top: 0 }))
 }
 async function collapseMap() {
   if (!expanded.value) return
-  expanded.value = false
-  await nextTick()
-  window.scrollTo({ top: listScroll })
+  await switchMap(false, () => window.scrollTo({ top: listScroll }))
 }
 onKeyStroke('Escape', collapseMap)
 watch(wide, (w) => { if (!w) expanded.value = false })
 
+const rowOf = (id: number) => document.getElementById(`restaurant-${id}`)
 async function selectPin(id: number) {
-  expanded.value = false
   opened.value = id
   view.value = 'list'
+  if (expanded.value) {
+    await switchMap(false, () => rowOf(id)?.scrollIntoView({ block: 'center' }))
+    return
+  }
   await nextTick()
-  document.getElementById(`restaurant-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  rowOf(id)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
 </script>
 
@@ -146,10 +164,13 @@ async function selectPin(id: number) {
     <!-- The same map element in both layouts, so widening it keeps the visitor's zoom. -->
     <aside v-if="showMap && wide" :class="!expanded && '-my-11 border-l border-default'">
       <div
-        class="relative"
-        :class="expanded ? 'h-[min(75vh,680px)] overflow-hidden rounded-lg border border-default' : 'sticky top-0 h-[min(100vh,760px)]'"
+        class="relative [view-transition-name:restaurant-map]"
+        :class="expanded
+          ? 'h-[clamp(20rem,calc(100dvh-22rem),680px)] overflow-hidden rounded-lg border border-default'
+          : 'sticky top-0 h-[min(100vh,760px)]'"
       >
-        <RestaurantMap :pins="pins" :active="active" :focus="focused" @hover="onPinHover" @select="selectPin" @map-click="expandMap" />
+        <!-- Wide, the map leaves room below it for the hovered restaurant's row. -->
+        <RestaurantMap ref="sideMap" :pins="pins" :active="active" :focus="focused" @hover="onPinHover" @select="selectPin" @map-click="expandMap" />
         <UButton
           class="absolute right-3 top-3 z-[1000] shadow-sm"
           color="neutral"
