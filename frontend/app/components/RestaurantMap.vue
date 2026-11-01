@@ -10,13 +10,16 @@ export interface MapPin {
   lng: number
 }
 
-const props = defineProps<{ pins: MapPin[], active?: number | null }>()
+// active: the highlighted pin. focus: the pin to zoom to (null: show every pin).
+const props = defineProps<{ pins: MapPin[], active?: number | null, focus?: number | null }>()
 const emit = defineEmits<{ hover: [id: number | null], select: [id: number] }>()
 
 const el = ref<HTMLElement>()
 let map: L.Map | null = null
 let markers = new Map<number, L.Marker>()
 let resize: ResizeObserver | null = null
+let focusTimer: ReturnType<typeof setTimeout> | undefined
+const FOCUS_ZOOM = 15
 
 function pinIcon(p: MapPin, on: boolean) {
   const size = on ? 30 : 24
@@ -40,9 +43,21 @@ function drawPins() {
       .addTo(map)
     markers.set(p.id, m)
   }
-  if (props.pins.length) {
-    map.fitBounds(L.latLngBounds(props.pins.map(p => [p.lat, p.lng] as L.LatLngTuple)), { padding: [40, 40], maxZoom: 15 })
-  }
+  showAll()
+}
+
+const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+function showAll(animate?: boolean) {
+  if (!map || !props.pins.length) return
+  map.fitBounds(L.latLngBounds(props.pins.map(p => [p.lat, p.lng] as L.LatLngTuple)), { padding: [40, 40], maxZoom: FOCUS_ZOOM, animate })
+}
+
+function zoomTo(p: MapPin) {
+  if (!map) return
+  const zoom = Math.max(map.getZoom(), FOCUS_ZOOM)
+  if (reducedMotion()) map.setView([p.lat, p.lng], zoom, { animate: false })
+  else map.flyTo([p.lat, p.lng], zoom, { duration: 0.6 })
 }
 
 onMounted(() => {
@@ -55,12 +70,24 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  clearTimeout(focusTimer)
   resize?.disconnect()
   map?.remove()
   map = null
 })
 
 watch(() => props.pins.map(p => `${p.id}:${p.label}:${p.lat}:${p.lng}`).join('|'), drawPins)
+// Wait a moment before moving, so sweeping the mouse across the list doesn't make the map jump
+// from pin to pin, and a short gap between two rows doesn't zoom out in between.
+watch(() => props.focus, (id) => {
+  clearTimeout(focusTimer)
+  focusTimer = setTimeout(() => {
+    const p = id != null ? props.pins.find(x => x.id === id) : undefined
+    if (p) zoomTo(p)
+    else showAll(!reducedMotion())
+  }, id != null ? 200 : 500)
+})
+
 watch(() => props.active, (cur, prev) => {
   for (const id of [prev, cur]) {
     const p = props.pins.find(x => x.id === id)

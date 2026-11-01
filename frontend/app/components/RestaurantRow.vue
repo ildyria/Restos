@@ -26,7 +26,7 @@ const visits = computed(() => `${r.value.visit_count} ${r.value.visit_count === 
 
 <template>
   <div
-    class="border-b border-default transition-colors"
+    class="group border-b border-default transition-colors"
     :class="highlighted || open ? 'bg-elevated/60' : ''"
     @mouseenter="$emit('hover', true)"
     @mouseleave="$emit('hover', false)"
@@ -49,7 +49,11 @@ const visits = computed(() => `${r.value.visit_count} ${r.value.visit_count === 
       </div>
 
       <div class="min-w-0">
-        <h3 class="font-display text-2xl leading-[1.1]">{{ r.name }}<MichelinStars v-if="r.michelin_stars" :count="r.michelin_stars" class="ml-2 text-base" /></h3>
+        <div class="flex items-start gap-1.5">
+          <h3 class="min-w-0 font-display text-2xl leading-[1.1]">{{ r.name }}<MichelinStars v-if="r.michelin_stars" :count="r.michelin_stars" class="ml-2 text-base" /></h3>
+          <!-- On hover-capable screens the edit button appears with the row's hover or focus. -->
+          <AdminEditButton :id="r.id" :name="r.name" class="shrink-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:hover)]:opacity-0" />
+        </div>
         <p class="mt-1.5 flex flex-wrap gap-x-[7px] text-sm text-muted">
           <template v-for="(m, i) in meta" :key="i"><span v-if="i" class="text-dimmed">·</span><span>{{ m }}</span></template>
         </p>
@@ -99,7 +103,10 @@ const visits = computed(() => `${r.value.visit_count} ${r.value.visit_count === 
       <div class="grid grid-cols-[1.75rem_minmax(0,1fr)_auto] items-start gap-3">
         <span class="rank-numeral text-2xl text-dimmed">{{ showRank ? r.rank_position : '' }}</span>
         <div class="min-w-0">
-          <h3 class="font-display text-2xl leading-[1.1]">{{ r.name }}<MichelinStars v-if="r.michelin_stars" :count="r.michelin_stars" class="ml-2 text-base" /></h3>
+          <div class="flex items-start gap-1.5">
+            <h3 class="min-w-0 font-display text-2xl leading-[1.1]">{{ r.name }}<MichelinStars v-if="r.michelin_stars" :count="r.michelin_stars" class="ml-2 text-base" /></h3>
+            <AdminEditButton :id="r.id" :name="r.name" class="shrink-0" />
+          </div>
           <p class="mt-[5px] text-sm text-muted">{{ meta.join(' · ') }}</p>
         </div>
         <span class="lining text-2xl">{{ formatScore(r.overall) }}</span>

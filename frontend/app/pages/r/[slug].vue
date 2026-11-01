@@ -32,9 +32,12 @@ const courseLabel = (c: string | null) => COURSES.find(x => x.value === c)?.labe
   </div>
 
   <article v-else-if="r">
-    <NuxtLink to="/" class="mb-6 inline-flex items-center gap-1 text-sm text-muted hover:text-default">
-      <UIcon name="i-lucide-arrow-left" class="size-4" /> All restaurants
-    </NuxtLink>
+    <div class="mb-6 flex items-center justify-between gap-4">
+      <NuxtLink to="/" class="inline-flex items-center gap-1 text-sm text-muted hover:text-default">
+        <UIcon name="i-lucide-arrow-left" class="size-4" /> All restaurants
+      </NuxtLink>
+      <AdminEditButton :id="r.id" :name="r.name" variant="subtle" size="sm">Edit</AdminEditButton>
+    </div>
 
     <div v-if="r.cover_key" class="mb-8 overflow-hidden rounded-lg bg-elevated">
       <img :src="mediaUrl(r.cover_key, 'full')" :alt="r.name" class="max-h-[28rem] w-full object-cover">

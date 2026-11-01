@@ -24,9 +24,14 @@ const tabs = [{ value: 'list', label: 'List' }, { value: 'map', label: 'Map' }] 
 const hovered = ref<number | null>(null)
 const opened = ref<number | null>(null)
 const active = computed(() => hovered.value ?? opened.value)
+// The map zooms to a restaurant hovered in the list; hovering a pin on the map doesn't move it.
+const focused = ref<number | null>(null)
 
 const toggle = (id: number) => { opened.value = opened.value === id ? null : id }
-const onHover = (id: number, on: boolean) => { hovered.value = on ? id : (hovered.value === id ? null : hovered.value) }
+const onHover = (id: number, on: boolean) => {
+  hovered.value = on ? id : (hovered.value === id ? null : hovered.value)
+  focused.value = on ? id : (focused.value === id ? null : focused.value)
+}
 
 async function selectPin(id: number) {
   opened.value = id
@@ -105,7 +110,7 @@ async function selectPin(id: number) {
 
     <aside v-if="showMap && wide" class="-my-11 border-l border-default">
       <div class="sticky top-0 h-[min(100vh,760px)]">
-        <RestaurantMap :pins="pins" :active="active" @hover="hovered = $event" @select="selectPin" />
+        <RestaurantMap :pins="pins" :active="active" :focus="focused" @hover="hovered = $event" @select="selectPin" />
       </div>
     </aside>
   </div>
