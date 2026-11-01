@@ -4,8 +4,11 @@ export interface ApiErrorShape { status: number, message: string }
 
 /** Pulls a readable message out of a $fetch error (our API replies {"error": "..."}). */
 export function errorMessage(e: unknown): string {
-  const err = e as { data?: { error?: string }, statusMessage?: string, message?: string }
-  return err?.data?.error || err?.statusMessage || err?.message || 'Something went wrong'
+  const err = e as { data?: { error?: string }, statusCode?: number, statusMessage?: string, message?: string }
+  if (err?.data?.error) return err.data.error
+  // Our API answers oversized uploads with a 400; a 413 comes from a proxy in front of it.
+  if (err?.statusCode === 413) return 'The file is too large for the server to accept (rejected before reaching the site; check the reverse proxy\'s upload size limit).'
+  return err?.statusMessage || err?.message || 'Something went wrong'
 }
 
 /** Mutating call helper: same-origin cookies plus the CSRF header the API requires. */
