@@ -33,6 +33,24 @@ const onHover = (id: number, on: boolean) => {
   focused.value = on ? id : (focused.value === id ? null : focused.value)
 }
 
+// Hovering a pin scrolls its row into view (when it's off-screen), after a short pause so that
+// sweeping across the map doesn't make the page jump.
+let pinTimer: ReturnType<typeof setTimeout> | undefined
+function onPinHover(id: number | null) {
+  hovered.value = id
+  clearTimeout(pinTimer)
+  if (id !== null) pinTimer = setTimeout(() => revealRow(id), 250)
+}
+function revealRow(id: number) {
+  const row = document.getElementById(`restaurant-${id}`)
+  if (!row) return // the list isn't shown (map tab)
+  const box = row.getBoundingClientRect()
+  if (box.top >= 0 && box.bottom <= window.innerHeight) return
+  const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  row.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'center' })
+}
+onBeforeUnmount(() => clearTimeout(pinTimer))
+
 async function selectPin(id: number) {
   opened.value = id
   view.value = 'list'
@@ -70,7 +88,7 @@ async function selectPin(id: number) {
       </div>
 
       <div v-else-if="showMap && !wide && view === 'map'" class="h-[560px] overflow-hidden rounded-lg border border-default">
-        <RestaurantMap :pins="pins" :active="active" @hover="hovered = $event" @select="selectPin" />
+        <RestaurantMap :pins="pins" :active="active" @hover="onPinHover" @select="selectPin" />
       </div>
 
       <template v-else>
@@ -110,7 +128,7 @@ async function selectPin(id: number) {
 
     <aside v-if="showMap && wide" class="-my-11 border-l border-default">
       <div class="sticky top-0 h-[min(100vh,760px)]">
-        <RestaurantMap :pins="pins" :active="active" :focus="focused" @hover="hovered = $event" @select="selectPin" />
+        <RestaurantMap :pins="pins" :active="active" :focus="focused" @hover="onPinHover" @select="selectPin" />
       </div>
     </aside>
   </div>

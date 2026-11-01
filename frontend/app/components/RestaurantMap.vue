@@ -61,7 +61,7 @@ function zoomTo(p: MapPin) {
 }
 
 onMounted(() => {
-  map = L.map(el.value!, { zoomControl: true, scrollWheelZoom: false }).setView([50.85, 4.35], 8)
+  map = L.map(el.value!, { zoomControl: true, scrollWheelZoom: true }).setView([50.85, 4.35], 8)
   baseTiles().addTo(map)
   drawPins()
   // The map can be mounted while its box is still settling (sticky column, tab switch).

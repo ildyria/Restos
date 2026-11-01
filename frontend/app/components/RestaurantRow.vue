@@ -31,9 +31,10 @@ const visits = computed(() => `${r.value.visit_count} ${r.value.visit_count === 
     @mouseenter="$emit('hover', true)"
     @mouseleave="$emit('hover', false)"
   >
-    <!-- Desktop / landscape tablet -->
+    <!-- Desktop / landscape tablet. Two lines: the name runs over the ratings column, and the
+         details sit beside the ratings below it; rank, picture and score span both lines. -->
     <div
-      class="hidden cursor-pointer grid-cols-[2.75rem_6rem_minmax(0,1fr)_20.5rem_3.5rem] items-center gap-5 px-3 py-[18px] md:grid"
+      class="hidden cursor-pointer grid-cols-[2.75rem_6rem_minmax(0,1fr)_20.5rem_3.5rem] items-center gap-x-5 gap-y-1.5 px-3 py-[18px] md:grid"
       role="button"
       tabindex="0"
       :aria-expanded="open"
@@ -41,20 +42,21 @@ const visits = computed(() => `${r.value.visit_count} ${r.value.visit_count === 
       @keydown.enter.prevent="$emit('toggle')"
       @keydown.space.prevent="$emit('toggle')"
     >
-      <span class="rank-numeral text-right text-4xl text-dimmed">{{ showRank ? r.rank_position : '' }}</span>
+      <span class="rank-numeral col-start-1 row-span-2 row-start-1 text-right text-4xl text-dimmed">{{ showRank ? r.rank_position : '' }}</span>
 
-      <div class="h-[72px] overflow-hidden rounded-md bg-elevated">
+      <div class="col-start-2 row-span-2 row-start-1 h-[72px] overflow-hidden rounded-md bg-elevated">
         <img v-if="r.cover_key" :src="mediaUrl(r.cover_key)" :alt="r.name" class="size-full object-cover" loading="lazy">
         <div v-else class="grid size-full place-items-center text-dimmed"><UIcon name="i-lucide-utensils-crossed" class="size-5" /></div>
       </div>
 
-      <div class="min-w-0">
-        <div class="flex items-start gap-1.5">
-          <h3 class="min-w-0 font-display text-2xl leading-[1.1]">{{ r.name }}<MichelinStars v-if="r.michelin_stars" :count="r.michelin_stars" class="ml-2 text-base" /></h3>
-          <!-- On hover-capable screens the edit button appears with the row's hover or focus. -->
-          <AdminEditButton :id="r.id" :name="r.name" class="shrink-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:hover)]:opacity-0" />
-        </div>
-        <p class="mt-1.5 flex flex-wrap gap-x-[7px] text-sm text-muted">
+      <div class="col-span-2 col-start-3 row-start-1 flex min-w-0 items-start gap-1.5 self-end">
+        <h3 class="min-w-0 font-display text-2xl leading-[1.1]">{{ r.name }}<MichelinStars v-if="r.michelin_stars" :count="r.michelin_stars" class="ml-2 text-base" /></h3>
+        <!-- On hover-capable screens the edit button appears with the row's hover or focus. -->
+        <AdminEditButton :id="r.id" :name="r.name" class="shrink-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:hover)]:opacity-0" />
+      </div>
+
+      <div class="col-start-3 row-start-2 min-w-0 self-start">
+        <p class="flex flex-wrap gap-x-[7px] text-sm text-muted">
           <template v-for="(m, i) in meta" :key="i"><span v-if="i" class="text-dimmed">·</span><span>{{ m }}</span></template>
         </p>
         <span v-if="verdict" class="mt-2 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs" :class="verdictClass[0]">
@@ -62,7 +64,7 @@ const visits = computed(() => `${r.value.visit_count} ${r.value.visit_count === 
         </span>
       </div>
 
-      <div class="grid grid-cols-5 gap-2">
+      <div class="col-start-4 row-start-2 grid grid-cols-5 gap-2 self-start">
         <div v-for="c in cats" :key="c.key">
           <div class="lining text-base">{{ c.text }}</div>
           <div class="mt-[5px] h-[3px] overflow-hidden rounded-sm bg-accented/60">
@@ -71,7 +73,7 @@ const visits = computed(() => `${r.value.visit_count} ${r.value.visit_count === 
         </div>
       </div>
 
-      <span class="lining text-right text-2xl">{{ formatScore(r.overall) }}</span>
+      <span class="lining col-start-5 row-span-2 row-start-1 text-right text-2xl">{{ formatScore(r.overall) }}</span>
     </div>
 
     <div v-if="open" class="hidden grid-cols-[2.75rem_6rem_minmax(0,1fr)_20.5rem_3.5rem] gap-5 px-3 pb-5 md:grid">
