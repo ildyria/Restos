@@ -3,6 +3,8 @@ const { user } = useAuth()
 const { refresh, checked } = useAuth()
 onMounted(() => { if (!checked.value) refresh() })
 
+useHead({ htmlAttrs: { class: 'stable-gutter' } })
+
 const { names } = usePeople()
 const nav = [{ to: '/', label: 'Ranking' }, { to: '/about', label: 'About us' }]
 const route = useRoute()

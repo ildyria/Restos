@@ -166,10 +166,11 @@ async function selectPin(id: number) {
       <div
         class="relative [view-transition-name:restaurant-map]"
         :class="expanded
-          ? 'h-[clamp(20rem,calc(100dvh-22rem),680px)] overflow-hidden rounded-lg border border-default'
+          ? 'h-[clamp(20rem,calc(100dvh-28rem),680px)] overflow-hidden rounded-lg border border-default'
           : 'sticky top-0 h-[min(100vh,760px)]'"
       >
-        <!-- Wide, the map leaves room below it for the hovered restaurant's row. -->
+        <!-- Wide, the map leaves room below it for the hovered restaurant's row, the footer and the
+             page padding, so the page doesn't start scrolling when a row appears. -->
         <RestaurantMap ref="sideMap" :pins="pins" :active="active" :focus="focused" @hover="onPinHover" @select="selectPin" @map-click="expandMap" />
         <UButton
           class="absolute right-3 top-3 z-[1000] shadow-sm"
@@ -183,9 +184,13 @@ async function selectPin(id: number) {
           <template v-if="expanded">Back to the list</template>
         </UButton>
       </div>
-      <div v-if="preview" class="mt-6">
-        <RestaurantListHeader />
-        <RestaurantRow :restaurant="preview" :show-rank="preview.rank_position !== null" />
+      <!-- The row's space (column labels and one row) is kept while the map is wide, so hovering a
+           number doesn't change the page's height. -->
+      <div v-if="expanded" class="mt-6 min-h-[146px]">
+        <template v-if="preview">
+          <RestaurantListHeader />
+          <RestaurantRow :restaurant="preview" :show-rank="preview.rank_position !== null" />
+        </template>
       </div>
     </aside>
   </div>

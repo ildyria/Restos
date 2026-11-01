@@ -53,6 +53,13 @@ html {
   font-feature-settings: 'cv11', 'ss01';
 }
 
+/* Public pages (layouts/default.vue) always keep room for the page scrollbar, so content that
+   makes the page scroll or stop scrolling (a row opening, the wide map's preview row) doesn't
+   shift everything sideways. The admin panel scrolls inside its own panels instead. */
+html.stable-gutter {
+  scrollbar-gutter: stable;
+}
+
 /* Journal masthead: double rule under the section nav. */
 .rule-double {
   border-top: 1px solid var(--ui-text-highlighted);
