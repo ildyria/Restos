@@ -21,6 +21,14 @@ let resize: ResizeObserver | null = null
 let focusTimer: ReturnType<typeof setTimeout> | undefined
 const FOCUS_ZOOM = 15
 
+// The view to return to once nothing is focused: whatever the visitor was looking at (their own
+// zoom included) before the map flew to a hovered restaurant.
+interface View { center: L.LatLng, zoom: number }
+let home: View | null = null
+// Set while flying back home, so a restaurant hovered mid-flight still returns to the same view
+// rather than to wherever the flight happened to be.
+let returningTo: View | null = null
+
 function pinIcon(p: MapPin, on: boolean) {
   const size = on ? 30 : 24
   return L.divIcon({
@@ -43,26 +51,42 @@ function drawPins() {
       .addTo(map)
     markers.set(p.id, m)
   }
+  home = returningTo = null
   showAll()
 }
 
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
-function showAll(animate?: boolean) {
+function showAll() {
   if (!map || !props.pins.length) return
-  map.fitBounds(L.latLngBounds(props.pins.map(p => [p.lat, p.lng] as L.LatLngTuple)), { padding: [40, 40], maxZoom: FOCUS_ZOOM, animate })
+  map.fitBounds(L.latLngBounds(props.pins.map(p => [p.lat, p.lng] as L.LatLngTuple)), { padding: [40, 40], maxZoom: FOCUS_ZOOM })
+}
+
+function moveTo(center: L.LatLngExpression, zoom: number) {
+  if (!map) return
+  if (reducedMotion()) map.setView(center, zoom, { animate: false })
+  else map.flyTo(center, zoom, { duration: 0.6 })
 }
 
 function zoomTo(p: MapPin) {
   if (!map) return
-  const zoom = Math.max(map.getZoom(), FOCUS_ZOOM)
-  if (reducedMotion()) map.setView([p.lat, p.lng], zoom, { animate: false })
-  else map.flyTo([p.lat, p.lng], zoom, { duration: 0.6 })
+  home ??= returningTo ?? { center: map.getCenter(), zoom: map.getZoom() }
+  moveTo([p.lat, p.lng], Math.max(map.getZoom(), FOCUS_ZOOM))
+}
+
+function goHome() {
+  if (!map || !home) return
+  const view = home
+  home = null
+  moveTo(view.center, view.zoom)
+  returningTo = view
 }
 
 onMounted(() => {
   map = L.map(el.value!, { zoomControl: true, scrollWheelZoom: true }).setView([50.85, 4.35], 8)
   baseTiles().addTo(map)
+  // Any finished move (the flight home, or the visitor's own zoom or pan) ends the return trip.
+  map.on('moveend', () => { returningTo = null })
   drawPins()
   // The map can be mounted while its box is still settling (sticky column, tab switch).
   resize = new ResizeObserver(() => map?.invalidateSize())
@@ -84,7 +108,7 @@ watch(() => props.focus, (id) => {
   focusTimer = setTimeout(() => {
     const p = id != null ? props.pins.find(x => x.id === id) : undefined
     if (p) zoomTo(p)
-    else showAll(!reducedMotion())
+    else goHome()
   }, id != null ? 200 : 500)
 })
 
