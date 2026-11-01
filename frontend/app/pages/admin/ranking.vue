@@ -100,9 +100,11 @@ async function save() {
             </li>
           </ol>
         </section>
-        <section>
+        <!-- Stays in view while the ranked list scrolls past, so a place can be dragged anywhere in
+             a long ranking; scrolls on its own when it is taller than the screen. -->
+        <section class="lg:sticky lg:top-0 lg:flex lg:max-h-[calc(100dvh-var(--ui-header-height)-3rem)] lg:flex-col lg:self-start">
           <h2 class="font-display mb-3 text-xl">Not ranked</h2>
-          <ul ref="unrankedEl" class="min-h-16 space-y-2 rounded-lg border border-dashed border-default p-2">
+          <ul ref="unrankedEl" class="min-h-16 space-y-2 rounded-lg border border-dashed border-default p-2 lg:overflow-y-auto">
             <li v-for="r in unranked" :key="r.id" class="flex items-center gap-3 rounded-md border border-default bg-default px-3 py-2">
               <UIcon name="i-lucide-grip-vertical" class="drag-handle size-5 shrink-0 cursor-grab text-dimmed" />
               <span class="flex-1 truncate font-medium">{{ r.name }}</span>

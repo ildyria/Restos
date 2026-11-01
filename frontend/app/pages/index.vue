@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { useMediaQuery } from '@vueuse/core'
+import { onKeyStroke, useMediaQuery } from '@vueuse/core'
 import type { RestaurantSummary } from '~~/shared/types'
-import { RATING_CRITERIA } from '~~/shared/types'
 import type { MapPin } from '~/components/RestaurantMap.vue'
 
 useSeoMeta({ title: `${SITE_NAME} — where we ate`, description: 'Restaurants we have visited, ranked by preference.' })
@@ -39,7 +38,7 @@ let pinTimer: ReturnType<typeof setTimeout> | undefined
 function onPinHover(id: number | null) {
   hovered.value = id
   clearTimeout(pinTimer)
-  if (id !== null) pinTimer = setTimeout(() => revealRow(id), 250)
+  if (id !== null && !expanded.value) pinTimer = setTimeout(() => revealRow(id), 250)
 }
 function revealRow(id: number) {
   const row = document.getElementById(`restaurant-${id}`)
@@ -51,7 +50,29 @@ function revealRow(id: number) {
 }
 onBeforeUnmount(() => clearTimeout(pinTimer))
 
+// Clicking the side map widens it over the list; under it, only the restaurant whose pin is hovered.
+const expanded = ref(false)
+const preview = computed(() => expanded.value ? (list.value ?? []).find(r => r.id === hovered.value) : undefined)
+let listScroll = 0
+async function expandMap() {
+  if (!wide.value || expanded.value) return
+  listScroll = window.scrollY
+  expanded.value = true
+  hovered.value = focused.value = null
+  await nextTick()
+  window.scrollTo({ top: 0 })
+}
+async function collapseMap() {
+  if (!expanded.value) return
+  expanded.value = false
+  await nextTick()
+  window.scrollTo({ top: listScroll })
+}
+onKeyStroke('Escape', collapseMap)
+watch(wide, (w) => { if (!w) expanded.value = false })
+
 async function selectPin(id: number) {
+  expanded.value = false
   opened.value = id
   view.value = 'list'
   await nextTick()
@@ -60,8 +81,8 @@ async function selectPin(id: number) {
 </script>
 
 <template>
-  <div :class="showMap && wide ? 'grid grid-cols-[minmax(0,1fr)_400px] gap-10' : ''">
-    <div class="min-w-0">
+  <div :class="showMap && wide && !expanded ? 'grid grid-cols-[minmax(0,1fr)_400px] gap-10' : ''">
+    <div v-show="!expanded" class="min-w-0">
       <h1 class="sr-only">Where we ate</h1>
       <section v-if="showMap && !wide" class="mb-6 flex sm:justify-end">
         <div class="flex gap-0.5 rounded-lg border border-default bg-elevated p-[3px]" role="tablist">
@@ -92,11 +113,7 @@ async function selectPin(id: number) {
       </div>
 
       <template v-else>
-        <div class="hidden grid-cols-[2.75rem_6rem_minmax(0,1fr)_20.5rem_3.5rem] gap-5 border-b border-default px-3 pb-2 text-[11px] uppercase tracking-normal text-dimmed md:grid">
-          <span /><span /><span />
-          <div class="grid grid-cols-5 gap-2"><span v-for="c in RATING_CRITERIA" :key="c.key">{{ c.label }}</span></div>
-          <span class="text-right">Score</span>
-        </div>
+        <RestaurantListHeader />
         <RestaurantRow
           v-for="r in ranked"
           :id="`restaurant-${r.id}`"
@@ -126,9 +143,28 @@ async function selectPin(id: number) {
       </template>
     </div>
 
-    <aside v-if="showMap && wide" class="-my-11 border-l border-default">
-      <div class="sticky top-0 h-[min(100vh,760px)]">
-        <RestaurantMap :pins="pins" :active="active" :focus="focused" @hover="onPinHover" @select="selectPin" />
+    <!-- The same map element in both layouts, so widening it keeps the visitor's zoom. -->
+    <aside v-if="showMap && wide" :class="!expanded && '-my-11 border-l border-default'">
+      <div
+        class="relative"
+        :class="expanded ? 'h-[min(75vh,680px)] overflow-hidden rounded-lg border border-default' : 'sticky top-0 h-[min(100vh,760px)]'"
+      >
+        <RestaurantMap :pins="pins" :active="active" :focus="focused" @hover="onPinHover" @select="selectPin" @map-click="expandMap" />
+        <UButton
+          class="absolute right-3 top-3 z-[1000] shadow-sm"
+          color="neutral"
+          variant="outline"
+          size="sm"
+          :icon="expanded ? 'i-lucide-minimize-2' : 'i-lucide-maximize-2'"
+          :aria-label="expanded ? 'Back to the list' : 'Widen the map'"
+          @click="expanded ? collapseMap() : expandMap()"
+        >
+          <template v-if="expanded">Back to the list</template>
+        </UButton>
+      </div>
+      <div v-if="preview" class="mt-6">
+        <RestaurantListHeader />
+        <RestaurantRow :restaurant="preview" :show-rank="preview.rank_position !== null" />
       </div>
     </aside>
   </div>

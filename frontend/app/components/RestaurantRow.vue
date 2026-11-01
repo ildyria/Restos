@@ -64,16 +64,22 @@ const visits = computed(() => `${r.value.visit_count} ${r.value.visit_count === 
         </span>
       </div>
 
+      <!-- Each score's label shows softly under it while the row is hovered or focused, as a
+           reminder once the column headings have scrolled away; its space is always kept. -->
       <div class="col-start-4 row-start-2 grid grid-cols-5 gap-2 self-start">
         <div v-for="c in cats" :key="c.key">
           <div class="lining text-base">{{ c.text }}</div>
           <div class="mt-[5px] h-[3px] overflow-hidden rounded-sm bg-accented/60">
             <div class="h-full bg-primary" :style="{ width: c.pct }" />
           </div>
+          <div class="mt-1 truncate text-[11px] text-dimmed opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">{{ c.label }}</div>
         </div>
       </div>
 
-      <span class="lining col-start-5 row-span-2 row-start-1 text-right text-2xl">{{ formatScore(r.overall) }}</span>
+      <span class="lining relative col-start-5 row-span-2 row-start-1 text-right text-2xl">
+        {{ formatScore(r.overall) }}
+        <span class="absolute right-0 top-full text-[11px] text-dimmed opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">Overall</span>
+      </span>
     </div>
 
     <div v-if="open" class="hidden grid-cols-[2.75rem_6rem_minmax(0,1fr)_20.5rem_3.5rem] gap-5 px-3 pb-5 md:grid">

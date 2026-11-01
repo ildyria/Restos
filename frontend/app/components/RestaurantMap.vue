@@ -12,7 +12,8 @@ export interface MapPin {
 
 // active: the highlighted pin. focus: the pin to zoom to (null: show every pin).
 const props = defineProps<{ pins: MapPin[], active?: number | null, focus?: number | null }>()
-const emit = defineEmits<{ hover: [id: number | null], select: [id: number] }>()
+// mapClick: a click on the map itself (not on a pin, the controls, or the end of a drag).
+const emit = defineEmits<{ hover: [id: number | null], select: [id: number], mapClick: [] }>()
 
 const el = ref<HTMLElement>()
 let map: L.Map | null = null
@@ -87,6 +88,7 @@ onMounted(() => {
   baseTiles().addTo(map)
   // Any finished move (the flight home, or the visitor's own zoom or pan) ends the return trip.
   map.on('moveend', () => { returningTo = null })
+  map.on('click', () => emit('mapClick'))
   drawPins()
   // The map can be mounted while its box is still settling (sticky column, tab switch).
   resize = new ResizeObserver(() => map?.invalidateSize())

@@ -16,7 +16,7 @@ function onKey(e: KeyboardEvent) {
   if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
     model.value = Math.min(5, cur + 0.5)
   } else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
-    model.value = cur <= 1 ? null : cur - 0.5
+    model.value = cur <= 0.5 ? null : cur - 0.5
   } else if (e.key === 'Backspace' || e.key === 'Delete') {
     model.value = null
   } else {
@@ -33,7 +33,7 @@ function onKey(e: KeyboardEvent) {
       role="slider"
       tabindex="0"
       :aria-label="label"
-      aria-valuemin="1"
+      aria-valuemin="0.5"
       aria-valuemax="5"
       :aria-valuenow="model ?? undefined"
       @keydown="onKey"

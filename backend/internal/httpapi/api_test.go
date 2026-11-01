@@ -141,6 +141,7 @@ func TestValidation(t *testing.T) {
 		"empty name":   {"name": "  "},
 		"bad rating":   {"name": "x", "scores": []map[string]any{{"user_id": 1, "rating_food": 4.3}}},
 		"rating range": {"name": "x", "scores": []map[string]any{{"user_id": 1, "rating_food": 6}}},
+		"rating zero":  {"name": "x", "scores": []map[string]any{{"user_id": 1, "rating_quiet": 0}}},
 		"dup person":   {"name": "x", "scores": []map[string]any{{"user_id": 1, "rating_food": 3}, {"user_id": 1, "rating_food": 4}}},
 		"no person":    {"name": "x", "scores": []map[string]any{{"user_id": 42, "rating_food": 3}}},
 		"half coords":  {"name": "x", "latitude": 51},
@@ -155,6 +156,11 @@ func TestValidation(t *testing.T) {
 	}
 	if rec := e.do("POST", "/api/admin/restaurants", map[string]any{"name": "ok", "scores": []map[string]any{{"user_id": 1, "rating_food": 3.5, "would_return": true}}}, true); rec.Code != 201 {
 		t.Fatalf("valid half-star = %d", rec.Code)
+	}
+	// The lowest rating is half a point, for every criterion (the database accepts it too).
+	low := map[string]any{"user_id": 1, "rating_food": 0.5, "rating_service": 0.5, "rating_ambiance": 0.5, "rating_value": 0.5, "rating_quiet": 0.5}
+	if rec := e.do("POST", "/api/admin/restaurants", map[string]any{"name": "low", "scores": []map[string]any{low}}, true); rec.Code != 201 {
+		t.Fatalf("half-point ratings = %d %s", rec.Code, rec.Body)
 	}
 }
 
