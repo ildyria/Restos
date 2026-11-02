@@ -41,8 +41,10 @@ const blank = (): RestaurantInput => ({
   latitude: null, longitude: null, review: '', scores: scoresFor(null)
 })
 const state = reactive<RestaurantInput>(blank())
-// New restaurants start with a visit (today, by default) so photos can go in right away.
+// New restaurants start with a visit (today, by default) so photos can go in right away, unless
+// we don't remember when we went: then there's no visit until one is added.
 const firstVisit = reactive({ visited_on: todayISO(), meal: mealNow(), notes: '' })
+const dateForgotten = ref(false)
 const meals = [{ label: 'Lunch', value: 'lunch' }, { label: 'Dinner', value: 'dinner' }]
 function fillForm() {
   const d = detail.value
@@ -176,8 +178,9 @@ async function save() {
   saving.value = true
   try {
     if (isNew.value) {
-      const created = await api<RestaurantDetail>('/api/admin/restaurants', { method: 'POST', body: { ...state, first_visit: { ...firstVisit }, site_image_key: siteKey.value } })
-      toast.add({ title: 'Restaurant created', description: 'Now add the photos from your visit.', color: 'success' })
+      const visit = dateForgotten.value ? undefined : { ...firstVisit }
+      const created = await api<RestaurantDetail>('/api/admin/restaurants', { method: 'POST', body: { ...state, first_visit: visit, site_image_key: siteKey.value } })
+      toast.add({ title: 'Restaurant created', description: visit && 'Now add the photos from your visit.', color: 'success' })
       await navigateTo(`/admin/restaurants/${created.id}`)
     } else {
       detail.value = await api<RestaurantDetail>(`/api/admin/restaurants/${detail.value!.id}`, { method: 'PUT', body: { ...state, site_image_key: siteKey.value } })
@@ -273,12 +276,15 @@ const deleteDish = (id: number, name: string) => ask(`Delete "${name}"?`, 'Its p
               </div>
             </div>
             <template v-if="isNew">
-              <UFormField label="First visit" name="first_visit">
-                <DateInput v-model="firstVisit.visited_on" />
-              </UFormField>
-              <UFormField label="Meal" name="first_visit_meal">
-                <USelect v-model="firstVisit.meal" :items="meals" class="w-full" />
-              </UFormField>
+              <template v-if="!dateForgotten">
+                <UFormField label="First visit" name="first_visit">
+                  <DateInput v-model="firstVisit.visited_on" />
+                </UFormField>
+                <UFormField label="Meal" name="first_visit_meal">
+                  <USelect v-model="firstVisit.meal" :items="meals" class="w-full" />
+                </UFormField>
+              </template>
+              <UCheckbox v-model="dateForgotten" label="We don't remember when we went" class="sm:col-span-2" />
             </template>
             <UFormField label="On the map" name="latitude" class="sm:col-span-2">
               <LocationPicker ref="locationPicker" v-model:lat="state.latitude" v-model:lng="state.longitude" :address="state.address" :city="state.city" />
@@ -414,6 +420,7 @@ const deleteDish = (id: number, name: string) => ask(`Delete "${name}"?`, 'Its p
             </li>
           </ul>
         </section>
+        <p v-else-if="dateForgotten" class="text-sm text-muted">The restaurant starts without a visit; you can add one later.</p>
         <p v-else class="text-sm text-muted">Saving creates the first visit; you can add its photos right after.</p>
       </div>
 

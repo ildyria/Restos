@@ -32,7 +32,7 @@ func TestAdminRoutesRequireLogin(t *testing.T) {
 
 	// Something real behind the ids, so a missing check would show up as a 2xx/4xx other than 401.
 	e.login()
-	rec := e.do("POST", "/api/admin/restaurants", map[string]any{"name": "Guarded"}, true)
+	rec := e.do("POST", "/api/admin/restaurants", map[string]any{"name": "Guarded", "first_visit": map[string]string{"visited_on": "2026-01-15", "meal": "dinner"}}, true)
 	if rec.Code != 201 {
 		t.Fatalf("setup: %d %s", rec.Code, rec.Body)
 	}

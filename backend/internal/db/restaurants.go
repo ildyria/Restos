@@ -82,7 +82,7 @@ type RestaurantInput struct {
 	Longitude      *float64     `json:"longitude"`
 	Review         string       `json:"review"`
 	Scores         []ScoreInput `json:"scores"`
-	// FirstVisit is only used on creation: the visit to start the restaurant with.
+	// FirstVisit is only used on creation: the visit to start the restaurant with, if any.
 	FirstVisit *VisitInput `json:"first_visit,omitempty"`
 	// SiteImageKey sets the website picture from a fetched (pending) image: nil leaves it
 	// unchanged, "" removes it.

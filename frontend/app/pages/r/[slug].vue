@@ -80,9 +80,9 @@ const courseLabel = (c: string | null) => COURSES.find(x => x.value === c)?.labe
 
     <section class="mt-14">
       <h2 class="font-display text-2xl">Visits</h2>
-      <p v-if="!r.visits.length" class="mt-3 text-sm text-muted">No visits recorded yet.</p>
+      <p v-if="!r.visits.length" class="mt-3 text-sm text-muted">We don't remember when we went.</p>
 
-      <ol class="mt-6 space-y-10 border-l border-default pl-6">
+      <ol v-else class="mt-6 space-y-10 border-l border-default pl-6">
         <li v-for="v in r.visits" :key="v.id" class="relative">
           <span class="absolute -left-[1.85rem] top-2 size-2.5 rounded-full bg-primary ring-4 ring-default" />
           <div class="flex flex-wrap items-center gap-2">

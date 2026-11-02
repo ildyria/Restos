@@ -36,15 +36,6 @@ func (s *Server) adminGetRestaurant(w http.ResponseWriter, r *http.Request) erro
 	return s.respondRestaurant(w, http.StatusOK, id)
 }
 
-// defaultFirstVisit is today's meal, used when a restaurant is created without a first visit.
-func defaultFirstVisit(now time.Time) *db.VisitInput {
-	meal := "dinner"
-	if now.Hour() < 16 {
-		meal = "lunch"
-	}
-	return &db.VisitInput{VisitedOn: now.Format("2006-01-02"), Meal: meal}
-}
-
 func (s *Server) createRestaurant(w http.ResponseWriter, r *http.Request) error {
 	var in db.RestaurantInput
 	if err := decode(w, r, &in); err != nil {
@@ -53,12 +44,11 @@ func (s *Server) createRestaurant(w http.ResponseWriter, r *http.Request) error 
 	if err := cleanRestaurant(&in); err != nil {
 		return err
 	}
-	// Every restaurant starts with a visit, so photos can be added straight away.
-	if in.FirstVisit == nil {
-		in.FirstVisit = defaultFirstVisit(time.Now())
-	}
-	if err := cleanVisit(in.FirstVisit); err != nil {
-		return err
+	// Without a first visit the restaurant starts with none (we don't remember when we went).
+	if in.FirstVisit != nil {
+		if err := cleanVisit(in.FirstVisit); err != nil {
+			return err
+		}
 	}
 	id, err := s.Store.CreateRestaurant(in)
 	if err != nil {

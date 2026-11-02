@@ -128,7 +128,7 @@ export interface RestaurantInput {
   longitude: number | null
   review: string
   scores: ScoreInput[]
-  /** Creation only: the visit the restaurant starts with. */
+  /** Creation only: the visit the restaurant starts with (absent: no visit). */
   first_visit?: VisitInput
   /** A fetched website picture to keep; '' removes it, absent leaves it unchanged. */
   site_image_key?: string

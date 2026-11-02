@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"restos/internal/auth"
 	"restos/internal/db"
@@ -192,13 +191,13 @@ func TestFullFlowWithUpload(t *testing.T) {
 	e.login()
 
 	var rest db.RestaurantDetail
-	rec := e.do("POST", "/api/admin/restaurants", map[string]any{"name": "Chez Test", "cuisine": "French", "scores": []map[string]any{{"user_id": 1, "rating_food": 4.5}}}, true)
+	firstVisit := map[string]string{"visited_on": "2026-01-15", "meal": "lunch"}
+	rec := e.do("POST", "/api/admin/restaurants", map[string]any{"name": "Chez Test", "cuisine": "French", "scores": []map[string]any{{"user_id": 1, "rating_food": 4.5}}, "first_visit": firstVisit}, true)
 	json.Unmarshal(rec.Body.Bytes(), &rest)
 	base := "/api/admin/restaurants/"
 
-	// A restaurant starts with one visit (today, by default).
-	if len(rest.Visits) != 1 || rest.Visits[0].VisitedOn != time.Now().Format("2006-01-02") {
-		t.Fatalf("default first visit = %+v", rest.Visits)
+	if len(rest.Visits) != 1 || rest.Visits[0].VisitedOn != "2026-01-15" {
+		t.Fatalf("first visit = %+v", rest.Visits)
 	}
 	vid := rest.Visits[0].ID
 
@@ -385,11 +384,37 @@ func TestFirstVisitOverride(t *testing.T) {
 	}
 }
 
+// A restaurant can have no visits at all (we don't remember when we went), and get one later.
+func TestRestaurantWithoutVisits(t *testing.T) {
+	e := newEnv(t)
+	e.login()
+	var rest db.RestaurantDetail
+	rec := e.do("POST", "/api/admin/restaurants", map[string]any{"name": "Long Ago", "scores": []map[string]any{{"user_id": 1, "rating_food": 4}}}, true)
+	json.Unmarshal(rec.Body.Bytes(), &rest)
+	if rec.Code != 201 || len(rest.Visits) != 0 {
+		t.Fatalf("create = %d %+v", rec.Code, rest.Visits)
+	}
+	if d, code := e.get(rest.Slug); code != 200 || len(d.Visits) != 0 {
+		t.Fatalf("public detail = %d %+v", code, d.Visits)
+	}
+	var list []db.RestaurantSummary
+	json.Unmarshal(e.do("GET", "/api/restaurants", nil, false).Body.Bytes(), &list)
+	if len(list) != 1 || list[0].VisitCount != 0 || list[0].LastVisit != nil {
+		t.Fatalf("public list = %+v", list)
+	}
+	if rec := e.do("POST", "/api/admin/restaurants/"+itoa(rest.ID)+"/visits", map[string]string{"visited_on": "2026-03-01", "meal": "dinner"}, true); rec.Code != 201 {
+		t.Fatalf("add visit later = %d %s", rec.Code, rec.Body)
+	}
+	if d, _ := e.get(rest.Slug); len(d.Visits) != 1 {
+		t.Fatalf("after adding a visit = %+v", d.Visits)
+	}
+}
+
 func TestRestaurantPhoto(t *testing.T) {
 	e := newEnv(t)
 	e.login()
 	var rest db.RestaurantDetail
-	rec := e.do("POST", "/api/admin/restaurants", map[string]any{"name": "Chez Photo"}, true)
+	rec := e.do("POST", "/api/admin/restaurants", map[string]any{"name": "Chez Photo", "first_visit": map[string]string{"visited_on": "2026-01-15", "meal": "dinner"}}, true)
 	json.Unmarshal(rec.Body.Bytes(), &rest)
 	base := "/api/admin/restaurants/" + itoa(rest.ID)
 	decode := func(rec *httptest.ResponseRecorder) db.RestaurantDetail {
