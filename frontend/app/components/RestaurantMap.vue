@@ -91,12 +91,44 @@ function refresh() {
   map.invalidateSize()
   if (fit) showAll()
 }
-defineExpose({ refresh })
 
+// While the page scrolls (index.vue bringing a hovered pin's row into view), keeps the map's
+// picture where it is on the screen: when the scroll moves the map's box, its view moves back by as
+// much, so the pin stays under the mouse. Ends once the page has been still for a moment.
+let holding: (() => void) | null = null
+function holdInPlace() {
+  holding?.()
+  const box = el.value
+  if (!map || !box) return
+  let top = box.getBoundingClientRect().top
+  let idle: ReturnType<typeof setTimeout>
+  const onScroll = () => {
+    const dy = Math.round(box.getBoundingClientRect().top - top)
+    if (dy && map) map.panBy([0, dy], { animate: false })
+    top += dy
+    clearTimeout(idle)
+    idle = setTimeout(stop, 200)
+  }
+  const stop = () => {
+    clearTimeout(idle)
+    window.removeEventListener('scroll', onScroll)
+    holding = null
+  }
+  window.addEventListener('scroll', onScroll, { passive: true })
+  idle = setTimeout(stop, 200)
+  holding = stop
+}
+defineExpose({ refresh, holdInPlace })
+
+// Moves are unhurried. A place near the current one at the same zoom (the next restaurant down the
+// street) is reached by a glide; a flight would zoom out and back in on the way.
 function moveTo(center: L.LatLngExpression, zoom: number) {
   if (!map) return
+  const size = map.getSize()
+  const near = zoom === map.getZoom() && map.project(center).distanceTo(map.project(map.getCenter())) < 2 * Math.max(size.x, size.y)
   if (reducedMotion()) map.setView(center, zoom, { animate: false })
-  else map.flyTo(center, zoom, { duration: 0.6 })
+  else if (near) map.panTo(center, { animate: true, duration: 0.9, easeLinearity: 0.5 })
+  else map.flyTo(center, zoom, { duration: 1.2 })
 }
 
 function zoomTo(p: MapPin) {
@@ -128,21 +160,22 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   clearTimeout(focusTimer)
+  holding?.()
   resize?.disconnect()
   map?.remove()
   map = null
 })
 
 watch(() => props.pins.map(p => `${p.id}:${p.label}:${p.lat}:${p.lng}`).join('|'), drawPins)
-// Wait a moment before moving, so sweeping the mouse across the list doesn't make the map jump
-// from pin to pin, and a short gap between two rows doesn't zoom out in between.
+// Wait for the mouse to settle on a row before moving, so sweeping across the list doesn't make
+// the map jump from pin to pin, and a short gap between two rows doesn't zoom out in between.
 watch(() => props.focus, (id) => {
   clearTimeout(focusTimer)
   focusTimer = setTimeout(() => {
     const p = id != null ? props.pins.find(x => x.id === id) : undefined
     if (p) zoomTo(p)
     else goHome()
-  }, id != null ? 200 : 500)
+  }, id != null ? 350 : 500)
 })
 
 watch(() => props.active, (cur, prev) => {

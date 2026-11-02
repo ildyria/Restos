@@ -40,13 +40,24 @@ function onPinHover(id: number | null) {
   clearTimeout(pinTimer)
   if (id !== null && !expanded.value) pinTimer = setTimeout(() => revealRow(id), 250)
 }
+// The scroll mustn't take the pin away from under the mouse. Once the side map is stuck to the top
+// of the window it stays put, so the page doesn't scroll back above that point (the first rows are
+// in view from there). Where the map's box moves anyway (scrolling down from the top of the page,
+// or the end of the list pushing it up on a short window), its view makes up for it.
+const mapColumn = useTemplateRef<HTMLElement>('mapColumn')
 function revealRow(id: number) {
   const row = document.getElementById(`restaurant-${id}`)
   if (!row) return // the list isn't shown (map tab)
   const box = row.getBoundingClientRect()
   if (box.top >= 0 && box.bottom <= window.innerHeight) return
+  let top = window.scrollY + box.top + box.height / 2 - window.innerHeight / 2
+  if (mapColumn.value) {
+    const stuckFrom = window.scrollY + mapColumn.value.getBoundingClientRect().top
+    top = Math.max(top, Math.min(window.scrollY, stuckFrom))
+  }
+  sideMap.value?.holdInPlace()
   const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  row.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'center' })
+  window.scrollTo({ top, behavior: smooth ? 'smooth' : 'auto' })
 }
 onBeforeUnmount(() => clearTimeout(pinTimer))
 
@@ -54,7 +65,7 @@ onBeforeUnmount(() => clearTimeout(pinTimer))
 const expanded = ref(false)
 const preview = computed(() => expanded.value ? (list.value ?? []).find(r => r.id === hovered.value) : undefined)
 let listScroll = 0
-const sideMap = useTemplateRef<{ refresh: () => void }>('sideMap')
+const sideMap = useTemplateRef<{ refresh: () => void, holdInPlace: () => void }>('sideMap')
 
 // Switching between the side map and the wide one: the map grows or shrinks into place while the
 // list fades (a view transition, see main.css). The layout change, the map's re-fit to its new
@@ -162,7 +173,7 @@ async function selectPin(id: number) {
     </div>
 
     <!-- The same map element in both layouts, so widening it keeps the visitor's zoom. -->
-    <aside v-if="showMap && wide" :class="!expanded && '-my-11 border-l border-default'">
+    <aside v-if="showMap && wide" ref="mapColumn" :class="!expanded && '-my-11 border-l border-default'">
       <div
         class="relative [view-transition-name:restaurant-map]"
         :class="expanded
