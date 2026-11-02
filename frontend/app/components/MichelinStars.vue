@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// Michelin Guide star, path taken from guide.michelin.com's michelin-star icon.
+// Michelin Guide star, path taken from guide.michelin.com's michelin-star icon. The icon is a
+// Michelin trademark and is not covered by this project's MIT license (see README).
 // Colour is the icon's display-p3 red, with its nearest sRGB value as fallback.
 defineProps<{ count: number }>()
 </script>

@@ -50,3 +50,7 @@ frontend/   Nuxt app: app/{pages,components,layouts,composables}, shared/types.t
 ```
 
 Notes: entering a website makes the server fetch that page and its preview picture (public addresses only, 15 s / 2 MB page / 20 MB image limits); fetched pictures not saved with a restaurant are deleted after a day. The names of admins who have scored a restaurant are public (masthead, About page, per-person scores); emails never are. Photos are re-encoded to JPEG (max 2000 px, plus a 480 px thumbnail), which also strips EXIF/GPS data. Login attempts are rate-limited per IP, and admin requests need a session cookie plus an `X-Requested-With` header. Behind a reverse proxy, the rate limiter sees the proxy's address.
+
+## License
+
+[MIT](LICENSE), except the Michelin star icon in `frontend/app/components/MichelinStars.vue`: it comes from guide.michelin.com, and the icon and the Michelin name are trademarks of Michelin. They aren't covered by this license and are only used to show that a restaurant holds Michelin stars.
